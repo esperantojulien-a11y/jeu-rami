@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Le Grand Rami</title>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- Écran d'accueil (Difficulté) -->
+    <div id="ecran-accueil">
+        <h1>Le Grand Rami</h1>
+        <p>Choisissez votre niveau de difficulté :</p>
+        <div class="boutons-difficulte">
+            <button onclick="demarrerJeu('facile')" class="btn-action btn-vert">Facile</button>
+            <button onclick="demarrerJeu('moyen')" class="btn-action btn-orange">Moyen</button>
+            <button onclick="demarrerJeu('difficile')" class="btn-action btn-rouge">Difficile</button>
+        </div>
+    </div>
+
+    <div id="table-de-jeu" style="display: none;">
+        
+        <!-- Tableau de bord des scores -->
+        <div id="tableau-bord">
+            <div class="score-box">
+                <span>Vous</span>
+                <strong id="score-joueur">0</strong> pts
+            </div>
+            <div class="score-box">
+                <span>L'Ordinateur</span>
+                <strong id="score-ordi">0</strong> pts
+            </div>
+        </div>
+
+        <!-- Zone de l'adversaire -->
+        <div id="adversaires">
+            <div class="profil-adversaire">
+                <div class="avatar">🤖</div>
+                <div class="infos-adversaire">
+                    <h3>L'Ordinateur <span id="niveau-actuel"></span></h3>
+                    <p id="info-ordi">13 cartes</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Zone centrale : Pioche, Combinaisons, Défausse -->
+        <div id="zone-centrale">
+            <div id="pioche" class="pile">
+                <img src="cartes/card_back_red.png" alt="Pioche" class="carte-dos">
+                <span id="compteur-pioche">91</span>
+            </div>
+            
+            <div id="combinaisons"></div>
+            
+            <div id="defausse" class="pile"></div>
+        </div>
+
+        <!-- Zone du joueur -->
+        <div id="zone-joueur">
+            <div class="header-joueur">
+                <h2 id="info-joueur">Votre main</h2>
+            </div>
+            
+            <div id="main-joueur"></div>
+            
+            <div id="actions">
+                <button id="btn-piocher" class="btn-action btn-bleu">Piocher</button>
+                <button id="btn-poser" class="btn-action btn-vert" disabled>Poser</button>
+                <button id="btn-voler" class="btn-action btn-orange" disabled>Voler & Poser</button>
+                <button id="btn-defausser" class="btn-action btn-rouge" disabled>Défausser</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Écran de fin de manche / partie -->
+    <div id="ecran-victoire">
+        <h1 id="titre-victoire">Fin de la manche !</h1>
+        <p id="texte-victoire" style="font-size: 20px; margin-bottom: 20px; text-align: center;"></p>
+        <div id="detail-points" style="margin-bottom: 30px; font-size: 18px; color: #ddd; text-align: center;"></div>
+        <button id="btn-suivant" class="btn-action btn-vert" style="font-size: 20px; padding: 15px 40px;">Suivant</button>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
