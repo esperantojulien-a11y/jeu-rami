@@ -287,6 +287,9 @@ function estUneTierce(cartes) {
     }
     return true;
 }
+function estCombinaisonValide(cartes) {
+    return estUnBrelan(cartes) || estUneTierce(cartes);
+}
 
 function decouperEnCombinaisons(cartes) {
     let pool = [...cartes];
@@ -300,6 +303,7 @@ function decouperEnCombinaisons(cartes) {
     let aTrouve = true;
     while (aTrouve) {
         aTrouve = false;
+        // 1. Chercher les suites
         for (let coul of couleurs) {
             let cartesCoul = pool.filter(c => c.couleur === coul);
             if (cartesCoul.length >= 3) {
@@ -325,10 +329,20 @@ function decouperEnCombinaisons(cartes) {
             if (aTrouve) break;
         }
         if (aTrouve) continue;
+
+        // 2. Chercher les brelans (SANS DOUBLON DE COULEUR)
         for (let val of valeurs) {
             let memeValeur = pool.filter(c => c.valeur === val);
-            if (memeValeur.length >= 3) {
-                let brelan = memeValeur.slice(0, 3);
+            let uniques = [];
+            let couleursVues = new Set();
+            for (let c of memeValeur) {
+                if (!couleursVues.has(c.couleur)) {
+                    uniques.push(c);
+                    couleursVues.add(c.couleur);
+                }
+            }
+            if (uniques.length >= 3) {
+                let brelan = uniques.slice(0, 3);
                 groupes.push(brelan);
                 brelan.forEach(c => pool.splice(pool.indexOf(c), 1));
                 aTrouve = true;
@@ -390,9 +404,7 @@ btnPoser.addEventListener("click", () => {
         if (carteObj) cartesHand.push(carteObj);
     });
 
-    // =======================================================
-    // CAS 1 : Le joueur veut COMPLÉTER une combinaison existante
-    // =======================================================
+    // CAS 1 : COMPLÉTER UNE COMBINAISON EXISTANTE
     if (carteTableHTML) {
         if (!j.aPose) return alert("Vous devez d'abord faire votre ouverture de 51 points pour compléter la table !");
         if (cartesHand.length === 0) return alert("Sélectionnez les cartes de votre main que vous voulez ajouter.");
@@ -400,44 +412,44 @@ btnPoser.addEventListener("click", () => {
         const altTable = carteTableHTML.alt;
         let combIndex = -1;
         
-        // On cherche à quelle combinaison appartient la carte sélectionnée sur la table
         combinaisonsTable.forEach((comb, i) => {
             if (comb.some(c => `${c.valeur} de ${c.couleur}` === altTable)) combIndex = i;
         });
 
         if (combIndex !== -1) {
-            // On crée la nouvelle combinaison (table + main)
             let nouvelleComb = [...combinaisonsTable[combIndex], ...cartesHand];
-            
-            // On vérifie si la fusion est valide (ex: 8-9-10 + 6-7 = 6-7-8-9-10)
             if (estCombinaisonValide(nouvelleComb)) {
-                // C'est valide ! On met à jour la table et on retire les cartes de la main
                 combinaisonsTable[combIndex] = nouvelleComb;
                 cartesHand.forEach(c => j.main.splice(j.main.indexOf(c), 1));
-                
                 afficherMainJoueur(j.main);
                 afficherTable();
                 mettreAJourUI();
                 jouerSon(sonPoser);
-                return; // On s'arrête là, c'est réussi
+                return; 
             } else {
                 return alert("Impossible de compléter : ces cartes ne s'ajoutent pas à cette combinaison.");
             }
         }
     }
 
-    // =======================================================
-    // CAS 2 : Le joueur veut POSER une NOUVELLE combinaison
-    // =======================================================
+    // CAS 2 : POSER UNE NOUVELLE COMBINAISON
     if (cartesHand.length === 0) return;
-
     let groupes = decouperEnCombinaisons(cartesHand);
-
     if (!groupes) return alert("Combinaison invalide.");
 
     let pointsTotal = groupes.reduce((sum, grp) => sum + grp.reduce((s, c) => s + calculerPointsCarte(c), 0), 0);
 
-    if (pointsTotal < 51 && !j.aPose) return alert(`Total : ${pointsTotal} pts. Il en faut 51.`);
+    // RÈGLE STRICTE D'OUVERTURE
+    if (!j.aPose) {
+        if (pointsTotal < 51) return alert(`Total : ${pointsTotal} pts. Il en faut 51.`);
+        
+        let aUnBrelan = groupes.some(grp => estUnBrelan(grp));
+        let aUneTierce = groupes.some(grp => estUneTierce(grp));
+        
+        if (!aUnBrelan || !aUneTierce) {
+            return alert("Règle de Jacqueline : pour ouvrir, il faut obligatoirement au moins UNE tierce ET UN brelan !");
+        }
+    }
 
     j.aPose = true;
     cartesHand.forEach(carte => j.main.splice(j.main.indexOf(carte), 1));
@@ -565,10 +577,20 @@ function tourIA() {
 
 function iaTrouveCombinaisons(main) {
     let combinaisons = [];
+    // Brelans SANS DOUBLON
     for (let val of valeurs) {
         let cartesMemeValeur = main.filter(c => c.valeur === val);
-        if (cartesMemeValeur.length >= 3) combinaisons.push(cartesMemeValeur.slice(0, cartesMemeValeur.length)); 
+        let uniques = [];
+        let couleursVues = new Set();
+        for (let c of cartesMemeValeur) {
+            if (!couleursVues.has(c.couleur)) {
+                uniques.push(c);
+                couleursVues.add(c.couleur);
+            }
+        }
+        if (uniques.length >= 3) combinaisons.push(uniques.slice(0, uniques.length)); 
     }
+    // Tierces
     for (let coul of couleurs) {
         let cartesCouleur = main.filter(c => c.couleur === coul);
         cartesCouleur.sort((a, b) => valeurs.indexOf(a.valeur) - valeurs.indexOf(b.valeur));
@@ -592,28 +614,45 @@ function iaTrouveCombinaisons(main) {
     }
     return combinaisons;
 }
-
 function iaJoueCombinaisons(j) {
     let combinaisonsPossibles = iaTrouveCombinaisons(j.main);
     if (combinaisonsPossibles.length === 0) return;
 
     if (!j.aPose) {
-        combinaisonsPossibles.sort((a, b) => b.reduce((s, c) => s + calculerPointsCarte(c), 0) - a.reduce((s, c) => s + calculerPointsCarte(c), 0));
-        let combinaisonsA_Poser = [], pointsTotal = 0;
-        for (let comb of combinaisonsPossibles) {
-            combinaisonsA_Poser.push(comb);
-            pointsTotal += comb.reduce((s, c) => s + calculerPointsCarte(c), 0);
-            if (pointsTotal >= 51) break; 
-        }
-        if (pointsTotal >= 51) {
-            combinaisonsA_Poser.forEach(comb => {
-                comb.forEach(c => j.main.splice(j.main.indexOf(c), 1));
-                combinaisonsTable.push(comb);
-            });
-            j.aPose = true;
-            afficherTable();
+        // L'IA doit OBLIGATOIREMENT avoir 1 brelan et 1 tierce pour ouvrir
+        let brelans = combinaisonsPossibles.filter(c => estUnBrelan(c));
+        let tierces = combinaisonsPossibles.filter(c => estUneTierce(c));
+
+        if (brelans.length > 0 && tierces.length > 0) {
+            // On prend les plus grosses combinaisons
+            brelans.sort((a, b) => b.reduce((s, c) => s + calculerPointsCarte(c), 0) - a.reduce((s, c) => s + calculerPointsCarte(c), 0));
+            tierces.sort((a, b) => b.reduce((s, c) => s + calculerPointsCarte(c), 0) - a.reduce((s, c) => s + calculerPointsCarte(c), 0));
+            
+            let combinaisonsA_Poser = [brelans[0], tierces[0]];
+            let pointsTotal = combinaisonsA_Poser[0].reduce((s, c) => s + calculerPointsCarte(c), 0) + combinaisonsA_Poser[1].reduce((s, c) => s + calculerPointsCarte(c), 0);
+            
+            // Si les 2 premières ne font pas 51, on ajoute les suivantes
+            let restantes = [...brelans.slice(1), ...tierces.slice(1)];
+            restantes.sort((a, b) => b.reduce((s, c) => s + calculerPointsCarte(c), 0) - a.reduce((s, c) => s + calculerPointsCarte(c), 0));
+            
+            for (let comb of restantes) {
+                if (pointsTotal >= 51) break;
+                combinaisonsA_Poser.push(comb);
+                pointsTotal += comb.reduce((s, c) => s + calculerPointsCarte(c), 0);
+            }
+            
+            // Si on a réussi à faire 51 points avec au moins 1 brelan et 1 tierce :
+            if (pointsTotal >= 51) {
+                combinaisonsA_Poser.forEach(comb => {
+                    comb.forEach(c => j.main.splice(j.main.indexOf(c), 1));
+                    combinaisonsTable.push(comb);
+                });
+                j.aPose = true;
+                afficherTable();
+            }
         }
     } else {
+        // Si l'IA a déjà ouvert, elle pose tout ce qu'elle peut
         combinaisonsPossibles.forEach(comb => {
             comb.forEach(c => j.main.splice(j.main.indexOf(c), 1));
             combinaisonsTable.push(comb);
