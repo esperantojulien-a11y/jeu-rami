@@ -528,3 +528,37 @@ function finDeManche(gagnant) {
     document.getElementById("detail-points").innerHTML = texteDetail;
     document.getElementById("ecran-victoire").style.display = "flex";
 }
+// --- GESTION DES BOUTONS D'INTERFACE (PLEIN ÉCRAN & RÈGLES) ---
+
+// 1. Bouton Plein Écran
+const btnFullscreen = document.getElementById("btn-fullscreen");
+if (btnFullscreen) {
+    btnFullscreen.addEventListener("click", () => {
+        if (!document.fullscreenElement) {
+            // Passer en plein écran
+            document.documentElement.requestFullscreen().catch(err => {
+                console.log(`Erreur plein écran : ${err.message}`);
+            });
+            btnFullscreen.textContent = "✖"; // Icône pour quitter
+        } else {
+            // Quitter le plein écran
+            document.exitFullscreen();
+            btnFullscreen.textContent = "⛶"; // Icône pour entrer
+        }
+    });
+}
+
+// 2. Bouton Règles
+const btnRegles = document.getElementById("btn-regles");
+const modalRegles = document.getElementById("modal-regles");
+const btnFermerRegles = document.getElementById("btn-fermer-regles");
+
+if (btnRegles && modalRegles) {
+    btnRegles.addEventListener("click", () => {
+        modalRegles.style.display = "flex"; // Afficher
+    });
+    
+    btnFermerRegles.addEventListener("click", () => {
+        modalRegles.style.display = "none"; // Cacher
+    });
+}
