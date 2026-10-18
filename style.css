@@ -343,3 +343,13 @@ body {
 #ecran-passe h1 {
     font-size: 50px; color: var(--or); margin-bottom: 10px;
 }
+/* Curseur spécial pour le glisser-déposer */
+.carte {
+    cursor: grab;
+}
+.carte:active {
+    cursor: grabbing;
+}
+.carte.selectionnee {
+    cursor: pointer; /* Si elle est sélectionnée, on peut cliquer pour annuler */
+}
