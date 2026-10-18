@@ -1,20 +1,30 @@
 // ==========================================
-// GESTION DU SON (AUDIO)
+// GESTION DU SON (AUDIO LOCAL)
 // ==========================================
-// On utilise des liens directs vers des sons libres de droits (Google Sound Library)
-const sonPiocher = new Audio('https://actions.google.com/sounds/v1/cartoon/wood_plank_flicks.ogg');
-const sonPoser = new Audio('https://actions.google.com/sounds/v1/ui/button_09.ogg');
-const sonVictoire = new Audio('https://actions.google.com/sounds/v1/crowds/cheering_2.ogg');
-const sonDefaite = new Audio('https://actions.google.com/sounds/v1/cartoon/cartoon_boing.ogg');
+const sonPiocher = new Audio('audio/pioche.ogg');
+const sonPoser = new Audio('audio/pose.ogg');
+const sonVictoire = new Audio('audio/victoire.ogg');
+const sonDefaite = new Audio('audio/defaite.ogg');
 
-// Fonction pour jouer un son (on remet le temps à 0 pour pouvoir rejouer vite)
+let estMuet = false;
+
 function jouerSon(sound) {
+    if (estMuet) return;
     sound.currentTime = 0;
-    sound.volume = 0.5; // Volume à 50% pour ne pas casser les oreilles
-    sound.play().catch(e => console.log("Le navigateur a bloqué le son (il faut cliquer sur la page d'abord)."));
+    sound.volume = 0.3; // Ajustez entre 0.1 (très bas) et 1.0 (très fort)
+    sound.play().catch(e => console.log("Le navigateur a bloqué le son (il faut cliquer sur la page)."));
 }
-// ==========================================
 
+document.addEventListener("DOMContentLoaded", () => {
+    const btnSon = document.getElementById("btn-son");
+    if(btnSon) {
+        btnSon.addEventListener("click", () => {
+            estMuet = !estMuet;
+            btnSon.textContent = estMuet ? "🔇" : "🔊";
+        });
+    }
+});
+// ==========================================
 
 // Variables globales
 let deck = [];
