@@ -19,10 +19,20 @@
         </div>
     </div>
 
+    <!-- La table de jeu (cachée au début) -->
     <div id="table-de-jeu" style="display: none;">
         
-        <!-- Tableau de bord des scores -->
+        <!-- Tableau de bord des scores et boutons d'interface -->
         <div id="tableau-bord">
+            <!-- Bouton Son -->
+            <button id="btn-son" class="btn-action" style="padding: 5px 15px; border-radius: 10px; background: rgba(0,0,0,0.6); font-size: 20px;">🔊</button>
+            
+            <!-- Bouton Règles -->
+            <button id="btn-regles" class="btn-action" style="padding: 5px 15px; border-radius: 10px; background: rgba(0,0,0,0.6); font-size: 20px;">📖</button>
+
+            <!-- Bouton Plein Écran -->
+            <button id="btn-fullscreen" class="btn-action" style="padding: 5px 15px; border-radius: 10px; background: rgba(0,0,0,0.6); font-size: 20px;">⛶</button>
+            
             <div class="score-box">
                 <span>Vous</span>
                 <strong id="score-joueur">0</strong> pts
@@ -79,6 +89,24 @@
         <p id="texte-victoire" style="font-size: 20px; margin-bottom: 20px; text-align: center;"></p>
         <div id="detail-points" style="margin-bottom: 30px; font-size: 18px; color: #ddd; text-align: center;"></div>
         <button id="btn-suivant" class="btn-action btn-vert" style="font-size: 20px; padding: 15px 40px;">Suivant</button>
+    </div>
+
+    <!-- Fenêtre des règles (Cachée par défaut) -->
+    <div id="modal-regles">
+        <div class="contenu-regles">
+            <h2>Règles du Rami</h2>
+            <ul>
+                <li><strong>Matériel :</strong> 2 jeux de 52 cartes (sans jokers).</li>
+                <li><strong>Distribution :</strong> 13 cartes par joueur (14 pour le premier).</li>
+                <li><strong>But :</strong> Se débarrasser de toutes ses cartes.</li>
+                <li><strong>Ouverture :</strong> Il faut poser des combinaisons (brelan ou suite) totalisant au moins <strong>51 points</strong>, et posséder au moins une tierce et un brelan.</li>
+                <li><strong>Premier tour :</strong> Impossible d'ouvrir au tout premier tour de jeu.</li>
+                <li><strong>Vol de cartes :</strong> Si une combinaison sur la table compte 4 cartes ou plus, vous pouvez en voler une pour compléter votre main (la combinaison d'origine doit rester valide).</li>
+                <li><strong>Valeur des cartes :</strong> As = 1 ou 11, Figures (Roi, Dame, Valet) = 10, autres = leur valeur.</li>
+                <li><strong>Fin de partie :</strong> Le premier à atteindre 100 points perd la partie.</li>
+            </ul>
+            <button id="btn-fermer-regles" class="btn-action btn-rouge" style="margin-top: 20px; width: 100%;">Fermer</button>
+        </div>
     </div>
 
     <script src="script.js"></script>
