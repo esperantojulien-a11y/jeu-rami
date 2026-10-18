@@ -127,6 +127,15 @@ function distribuerCartes() {
     for (let i = 0; i < 13; i++) {
         joueurs.forEach(j => j.main.push(deck.pop()));
     }
+    
+    // On trie la main de chaque joueur UNE SEULE FOIS au début
+    joueurs.forEach(j => {
+        j.main.sort((a, b) => {
+            if (a.couleur === b.couleur) return valeurs.indexOf(a.valeur) - valeurs.indexOf(b.valeur);
+            return couleurs.indexOf(a.couleur) - couleurs.indexOf(b.couleur);
+        });
+    });
+
     carteDefausseActuelle = deck.pop();
     afficherCarteDefausse();
 }
@@ -191,21 +200,58 @@ function creerImageCarte(carte, estSurTable = false) {
     return img;
 }
 
+// Variable globale pour mémoriser la carte en cours de déplacement
+let draggedCardIndex = null;
+
 function afficherMainJoueur(main) {
     conteneurMain.innerHTML = "";
-    main.sort((a, b) => {
-        if (a.couleur === b.couleur) return valeurs.indexOf(a.valeur) - valeurs.indexOf(b.valeur);
-        return couleurs.indexOf(a.couleur) - couleurs.indexOf(b.couleur);
-    });
+    
+    // Plus de tri automatique ici ! On respecte l'ordre du tableau.
 
-    main.forEach((carte) => {
+    main.forEach((carte, index) => {
         const img = creerImageCarte(carte);
+        
+        // On rend l'image "attrapable"
+        img.setAttribute("draggable", "true");
+        img.dataset.index = index;
+
+        // Clic normal (sélectionner pour poser)
         img.addEventListener("click", () => {
             if (!mancheTerminee) {
                 img.classList.toggle("selectionnee");
                 jouerSon(sonPiocher);
             }
         });
+
+        // --- LOGIQUE DU GLISSER-DÉPOSER ---
+        img.addEventListener("dragstart", function(e) {
+            if (mancheTerminee) return;
+            draggedCardIndex = index;
+            // Petit effet visuel : la carte devient transparente quand on la tire
+            setTimeout(() => this.style.opacity = '0.4', 0); 
+        });
+
+        img.addEventListener("dragend", function(e) {
+            this.style.opacity = '1'; // On remet l'opacité normale
+        });
+
+        img.addEventListener("dragover", function(e) {
+            e.preventDefault(); // Indispensable pour autoriser le dépôt
+        });
+
+        img.addEventListener("drop", function(e) {
+            e.preventDefault();
+            if (draggedCardIndex === null || draggedCardIndex === index) return;
+
+            // On échange la carte de place dans le tableau
+            const mainActuelle = joueurs[joueurActuel].main;
+            const carteDeplacee = mainActuelle.splice(draggedCardIndex, 1)[0];
+            mainActuelle.splice(index, 0, carteDeplacee);
+
+            draggedCardIndex = null;
+            afficherMainJoueur(mainActuelle); // On redessine la main dans le nouvel ordre
+        });
+
         conteneurMain.appendChild(img);
     });
 }
