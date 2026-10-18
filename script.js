@@ -1,49 +1,33 @@
 // ==========================================
-// GESTION DU SON (AUDIO LOCAL)
+// GESTION DU SON
 // ==========================================
 const sonPiocher = new Audio('audio/pioche.ogg');
 const sonPoser = new Audio('audio/pose.ogg');
 const sonVictoire = new Audio('audio/victoire.ogg');
 const sonDefaite = new Audio('audio/defaite.ogg');
-
 let estMuet = false;
-
 function jouerSon(sound) {
     if (estMuet) return;
     sound.currentTime = 0;
-    sound.volume = 0.3; // Ajustez entre 0.1 (très bas) et 1.0 (très fort)
-    sound.play().catch(e => console.log("Le navigateur a bloqué le son (il faut cliquer sur la page)."));
+    sound.volume = 0.3;
+    sound.play().catch(e => console.log("Son bloqué"));
 }
 
-document.addEventListener("DOMContentLoaded", () => {
-    const btnSon = document.getElementById("btn-son");
-    if(btnSon) {
-        btnSon.addEventListener("click", () => {
-            estMuet = !estMuet;
-            btnSon.textContent = estMuet ? "🔇" : "🔊";
-        });
-    }
-});
 // ==========================================
-
-// Variables globales
+// VARIABLES GLOBALES
+// ==========================================
 let deck = [];
-let mainJoueur = [];
-let mainOrdi = [];
 let combinaisonsTable = []; 
 let carteDefausseActuelle = null; 
 
-let estTourJoueur = true;
-let aPioche = false;
-let aPoseOuvertureJoueur = false; 
-let aPoseOuvertureOrdi = false;
+let joueurs = []; // Tableau qui contiendra tous les joueurs
+let joueurActuel = 0; // Index du joueur en cours
 let premierTourGlobal = true; 
-
-// Variables de progression
-let scoreJoueur = 0;
-let scoreOrdi = 0;
-let niveauDifficulte = 'moyen'; 
 let mancheTerminee = false;
+
+// Paramètres de partie
+let nbJoueursTotal = 1;
+let niveauDifficulte = 'moyen';
 
 const couleurs = ['coeur', 'carreau', 'trefle', 'pique'];
 const valeurs = ['as', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'valet', 'dame', 'roi'];
@@ -58,38 +42,70 @@ const btnPoser = document.getElementById("btn-poser");
 const btnVoler = document.getElementById("btn-voler");
 const btnDefausser = document.getElementById("btn-defausser");
 
-// --- INITIALISATION ---
-function demarrerJeu(niveau) {
+// ==========================================
+// CONFIGURATION DE LA PARTIE
+// ==========================================
+function setNbJoueurs(nb) {
+    nbJoueursTotal = nb;
+    for(let i=1; i<=4; i++) document.getElementById(`btn-j${i}`).classList.remove('actif');
+    document.getElementById(`btn-j${nb}`).classList.add('actif');
+    
+    // Si c'est du multi-joueurs, on cache la difficulté de l'IA
+    document.getElementById("section-difficulte").style.display = (nb === 1) ? "block" : "none";
+}
+
+function setDifficulte(niveau) {
     niveauDifficulte = niveau;
-    document.getElementById("niveau-actuel").textContent = `(${niveau})`;
+    ['facile', 'moyen', 'difficile'].forEach(n => document.getElementById(`btn-${n}`).classList.remove('actif'));
+    document.getElementById(`btn-${niveau}`).classList.add('actif');
+}
+
+function lancerPartie() {
     document.getElementById("ecran-accueil").style.display = "none";
     document.getElementById("table-de-jeu").style.display = "flex";
-    scoreJoueur = 0; scoreOrdi = 0;
-    mettreAJourScores();
+    
+    // Création des joueurs
+    joueurs = [];
+    for (let i = 0; i < nbJoueursTotal; i++) {
+        joueurs.push({
+            id: i,
+            nom: `Joueur ${i + 1}`,
+            main: [],
+            score: 0,
+            aPose: false,
+            isIA: false
+        });
+    }
+    
+    // Si 1 seul joueur, on ajoute l'IA
+    if (nbJoueursTotal === 1) {
+        joueurs.push({ id: 1, nom: "L'IA", main: [], score: 0, aPose: false, isIA: true });
+        document.getElementById("adversaires").innerHTML = `<div class="profil-adversaire"><div class="avatar">🤖</div><div class="infos-adversaire"><h3>L'IA <span>(${niveauDifficulte})</span></h3><p id="info-ordi">13 cartes</p></div></div>`;
+    } else {
+        document.getElementById("adversaires").innerHTML = `<div class="profil-adversaire"><div class="avatar">👥</div><div class="infos-adversaire"><h3>Partie à ${nbJoueursTotal} joueurs</h3><p>Sur le même écran</p></div></div>`;
+    }
+
     demarrerManche();
 }
 
+// ==========================================
+// LOGIQUE DU JEU
+// ==========================================
 function demarrerManche() {
     mancheTerminee = false;
     premierTourGlobal = true;
-    aPoseOuvertureJoueur = false;
-    aPoseOuvertureOrdi = false;
     combinaisonsTable = [];
     combinaisonsHTML.innerHTML = "";
-    estTourJoueur = true;
-    aPioche = false;
+    joueurActuel = 0;
+    
+    joueurs.forEach(j => { j.main = []; j.aPose = false; });
     
     document.getElementById("ecran-victoire").style.display = "none";
+    
     creerDeck();
     distribuerCartes();
-    afficherMainJoueur();
-    afficherTable();
-    mettreAJourUI();
-}
-
-function mettreAJourScores() {
-    document.getElementById("score-joueur").textContent = scoreJoueur;
-    document.getElementById("score-ordi").textContent = scoreOrdi;
+    afficherScores();
+    preparerTour();
 }
 
 function creerDeck() {
@@ -108,13 +124,63 @@ function creerDeck() {
 }
 
 function distribuerCartes() {
-    mainJoueur = deck.splice(0, 13);
-    mainOrdi = deck.splice(0, 13);
+    for (let i = 0; i < 13; i++) {
+        joueurs.forEach(j => j.main.push(deck.pop()));
+    }
     carteDefausseActuelle = deck.pop();
     afficherCarteDefausse();
 }
 
-// --- AFFICHAGE ---
+function afficherScores() {
+    const conteneur = document.getElementById("scores-container");
+    conteneur.innerHTML = "";
+    joueurs.forEach(j => {
+        conteneur.innerHTML += `
+            <div class="score-box" style="${j.id === joueurActuel ? 'border: 2px solid var(--or); box-shadow: 0 0 10px var(--or);' : ''}">
+                <span>${j.nom}</span>
+                <strong>${j.score}</strong> pts
+            </div>
+        `;
+    });
+}
+
+// ==========================================
+// TOUR PAR TOUR
+// ==========================================
+function preparerTour() {
+    afficherScores();
+    const j = joueurs[joueurActuel];
+    
+    if (j.isIA) {
+        document.getElementById("zone-joueur").style.visibility = "hidden";
+        setTimeout(tourIA, 1500);
+    } else {
+        // Si c'est un joueur humain et qu'il y a plusieurs joueurs, on affiche l'écran de passage
+        if (nbJoueursTotal > 1) {
+            document.getElementById("titre-passe").textContent = `Au tour du ${j.nom}`;
+            document.getElementById("ecran-passe").style.display = "flex";
+            document.getElementById("table-de-jeu").style.visibility = "hidden";
+        } else {
+            debutTourJoueur();
+        }
+    }
+}
+
+function debutTourJoueur() {
+    document.getElementById("ecran-passe").style.display = "none";
+    document.getElementById("table-de-jeu").style.visibility = "visible";
+    document.getElementById("zone-joueur").style.visibility = "visible";
+    
+    const j = joueurs[joueurActuel];
+    document.getElementById("info-joueur").textContent = `Main de ${j.nom} (${j.main.length} cartes)`;
+    
+    afficherMainJoueur(j.main);
+    mettreAJourUI();
+}
+
+// ==========================================
+// AFFICHAGE
+// ==========================================
 function creerImageCarte(carte, estSurTable = false) {
     const img = document.createElement("img");
     img.classList.add(estSurTable ? "carte-table" : "carte");
@@ -125,19 +191,19 @@ function creerImageCarte(carte, estSurTable = false) {
     return img;
 }
 
-function afficherMainJoueur() {
+function afficherMainJoueur(main) {
     conteneurMain.innerHTML = "";
-    mainJoueur.sort((a, b) => {
+    main.sort((a, b) => {
         if (a.couleur === b.couleur) return valeurs.indexOf(a.valeur) - valeurs.indexOf(b.valeur);
         return couleurs.indexOf(a.couleur) - couleurs.indexOf(b.couleur);
     });
 
-    mainJoueur.forEach((carte) => {
+    main.forEach((carte) => {
         const img = creerImageCarte(carte);
         img.addEventListener("click", () => {
-            if(estTourJoueur && !mancheTerminee) {
+            if (!mancheTerminee) {
                 img.classList.toggle("selectionnee");
-                jouerSon(sonPiocher); // Petit bruit quand on sélectionne
+                jouerSon(sonPiocher);
             }
         });
         conteneurMain.appendChild(img);
@@ -153,7 +219,7 @@ function afficherTable() {
         combinaison.forEach(carte => {
             const img = creerImageCarte(carte, true);
             img.addEventListener("click", () => {
-                if(estTourJoueur && aPioche && !mancheTerminee) {
+                if (!mancheTerminee) {
                     if(combinaison.length > 3) {
                         document.querySelectorAll('.carte-table').forEach(c => c.classList.remove('selectionnee'));
                         img.classList.add("selectionnee");
@@ -176,14 +242,14 @@ function afficherCarteDefausse() {
 
 function mettreAJourUI() {
     document.getElementById("compteur-pioche").textContent = deck.length;
-    document.getElementById("info-joueur").textContent = `Votre main (${mainJoueur.length} cartes)`;
-    document.getElementById("info-ordi").textContent = `${mainOrdi.length} cartes`;
-
-    if (estTourJoueur && !mancheTerminee) {
-        btnPiocher.disabled = aPioche;
-        btnDefausser.disabled = !aPioche;
-        btnPoser.disabled = !aPioche; 
-        btnVoler.disabled = !aPioche || !aPoseOuvertureJoueur; 
+    
+    if (!mancheTerminee && joueurs[joueurActuel]) {
+        const j = joueurs[joueurActuel];
+        // On gère l'état des boutons (simplifié ici car géré en interne par les fonctions)
+        btnPiocher.disabled = j.aPioche;
+        btnDefausser.disabled = !j.aPioche;
+        btnPoser.disabled = !j.aPioche; 
+        btnVoler.disabled = !j.aPioche || !j.aPose; 
     } else {
         btnPiocher.disabled = true;
         btnDefausser.disabled = true;
@@ -192,7 +258,9 @@ function mettreAJourUI() {
     }
 }
 
-// --- RÈGLES DU JEU (JOUEUR) ---
+// ==========================================
+// RÈGLES ET COMBINAISONS
+// ==========================================
 function calculerPointsCarte(carte, estDernierDeSuite = false) {
     if (carte.valeur === 'as') return estDernierDeSuite ? 11 : 1;
     if (['valet', 'dame', 'roi'].includes(carte.valeur)) return 10;
@@ -220,26 +288,178 @@ function estUneTierce(cartes) {
     return true;
 }
 
-function estCombinaisonValide(cartes) {
-    return estUnBrelan(cartes) || estUneTierce(cartes);
+function decouperEnCombinaisons(cartes) {
+    let pool = [...cartes];
+    let groupes = [];
+
+    pool.sort((a, b) => {
+        if (a.couleur === b.couleur) return valeurs.indexOf(a.valeur) - valeurs.indexOf(b.valeur);
+        return couleurs.indexOf(a.couleur) - couleurs.indexOf(b.couleur);
+    });
+
+    let aTrouve = true;
+    while (aTrouve) {
+        aTrouve = false;
+        for (let coul of couleurs) {
+            let cartesCoul = pool.filter(c => c.couleur === coul);
+            if (cartesCoul.length >= 3) {
+                for (let i = 0; i <= cartesCoul.length - 3; i++) {
+                    let suite = [cartesCoul[i]];
+                    for (let j = i + 1; j < cartesCoul.length; j++) {
+                        if (valeurs.indexOf(cartesCoul[j].valeur) === valeurs.indexOf(suite[suite.length - 1].valeur) + 1) {
+                            suite.push(cartesCoul[j]);
+                        } else if (suite.length === 3 && suite[0].valeur === 'dame' && suite[1].valeur === 'roi' && cartesCoul[j].valeur === 'as') {
+                            suite.push(cartesCoul[j]);
+                        } else {
+                            break;
+                        }
+                    }
+                    if (suite.length >= 3) {
+                        groupes.push(suite);
+                        suite.forEach(c => pool.splice(pool.indexOf(c), 1));
+                        aTrouve = true;
+                        break;
+                    }
+                }
+            }
+            if (aTrouve) break;
+        }
+        if (aTrouve) continue;
+        for (let val of valeurs) {
+            let memeValeur = pool.filter(c => c.valeur === val);
+            if (memeValeur.length >= 3) {
+                let brelan = memeValeur.slice(0, 3);
+                groupes.push(brelan);
+                brelan.forEach(c => pool.splice(pool.indexOf(c), 1));
+                aTrouve = true;
+                break;
+            }
+        }
+    }
+    if (pool.length > 0) return null; 
+    return groupes;
 }
 
-// --- ACTIONS DU JOUEUR ---
+// ==========================================
+// ACTIONS DU JOUEUR
+// ==========================================
+btnPiocher.addEventListener("click", () => {
+    const j = joueurs[joueurActuel];
+    if (j.aPioche || mancheTerminee || j.isIA) return;
+    
+    let nouvelleCarte = piocherDansLeDeck();
+    if (!nouvelleCarte) return; 
+    j.main.push(nouvelleCarte);
+    j.aPioche = true;
+    afficherMainJoueur(j.main);
+    mettreAJourUI();
+    jouerSon(sonPiocher);
+});
+
 defausseHTML.addEventListener("click", () => {
-    if (!estTourJoueur || aPioche || mancheTerminee || !carteDefausseActuelle) return;
-    if (!aPoseOuvertureJoueur) {
-        let mainTest = [...mainJoueur, carteDefausseActuelle];
+    const j = joueurs[joueurActuel];
+    if (j.aPioche || mancheTerminee || !carteDefausseActuelle || j.isIA) return;
+    
+    if (!j.aPose) {
+        let mainTest = [...j.main, carteDefausseActuelle];
         if (calculerPointsMain(mainTest) < 51) {
             return alert("Vous ne pouvez prendre la défausse que si elle vous permet de faire vos 51 points !");
         }
     }
-    mainJoueur.push(carteDefausseActuelle);
+    j.main.push(carteDefausseActuelle);
     carteDefausseActuelle = null; 
-    aPioche = true; 
+    j.aPioche = true; 
     afficherCarteDefausse();
-    afficherMainJoueur();
+    afficherMainJoueur(j.main);
     mettreAJourUI();
-    jouerSon(sonPiocher); // Son quand on prend la défausse
+    jouerSon(sonPiocher);
+});
+
+btnPoser.addEventListener("click", () => {
+    const j = joueurs[joueurActuel];
+    if (premierTourGlobal || mancheTerminee || j.isIA) return;
+    
+    const cartesSelectionneesHTML = document.querySelectorAll('#main-joueur .carte.selectionnee');
+    if (cartesSelectionneesHTML.length === 0) return alert("Sélectionnez des cartes.");
+
+    let cartesA_Poser = [];
+    cartesSelectionneesHTML.forEach(imgHTML => {
+        const carteObj = j.main.find(c => `${c.valeur} de ${c.couleur}` === imgHTML.alt);
+        if (carteObj) cartesA_Poser.push(carteObj);
+    });
+
+    let groupes = decouperEnCombinaisons(cartesA_Poser);
+
+    if (!groupes) return alert("Combinaison invalide.");
+
+    let pointsTotal = groupes.reduce((sum, grp) => sum + grp.reduce((s, c) => s + calculerPointsCarte(c), 0), 0);
+
+    if (pointsTotal < 51 && !j.aPose) return alert(`Total : ${pointsTotal} pts. Il en faut 51.`);
+
+    j.aPose = true;
+    cartesA_Poser.forEach(carte => j.main.splice(j.main.indexOf(carte), 1));
+    groupes.forEach(grp => combinaisonsTable.push(grp));
+    
+    afficherMainJoueur(j.main);
+    afficherTable();
+    mettreAJourUI();
+    jouerSon(sonPoser);
+});
+
+btnVoler.addEventListener("click", () => {
+    const j = joueurs[joueurActuel];
+    if (mancheTerminee || j.isIA) return;
+    
+    const carteTableHTML = document.querySelector('.carte-table.selectionnee');
+    const cartesMainHTML = document.querySelectorAll('#main-joueur .carte.selectionnee');
+    if (!carteTableHTML || cartesMainHTML.length === 0) return alert("Sélectionnez une carte sur la table ET de votre main.");
+
+    const altCarteVolee = carteTableHTML.alt;
+    let carteVolee = null, indexCombinaison = -1;
+    combinaisonsTable.forEach((comb, i) => {
+        const c = comb.find(c => `${c.valeur} de ${c.couleur}` === altCarteVolee);
+        if (c) { carteVolee = c; indexCombinaison = i; }
+    });
+
+    let cartesMain = [];
+    cartesMainHTML.forEach(imgHTML => {
+        const c = j.main.find(c => `${c.valeur} de ${c.couleur}` === imgHTML.alt);
+        if (c) cartesMain.push(c);
+    });
+
+    let nouvelleCombinaison = [...cartesMain, carteVolee];
+    if (!decouperEnCombinaisons(nouvelleCombinaison)) return alert("Nouvelle combinaison invalide.");
+    if (combinaisonsTable[indexCombinaison].length - 1 < 3) return alert("Pas assez de cartes sur la table.");
+
+    combinaisonsTable[indexCombinaison].splice(combinaisonsTable[indexCombinaison].indexOf(carteVolee), 1);
+    cartesMain.forEach(c => j.main.splice(j.main.indexOf(c), 1));
+    combinaisonsTable.push(nouvelleCombinaison);
+
+    afficherMainJoueur(j.main);
+    afficherTable();
+    mettreAJourUI();
+    jouerSon(sonPoser);
+});
+
+btnDefausser.addEventListener("click", () => {
+    const j = joueurs[joueurActuel];
+    if (!j.aPioche || mancheTerminee || j.isIA) return;
+    
+    const carteSelectionneeHTML = document.querySelector('#main-joueur .carte.selectionnee');
+    if (!carteSelectionneeHTML) return alert("Sélectionnez une carte à jeter.");
+    
+    const altCarte = carteSelectionneeHTML.alt;
+    const indexCarte = j.main.findIndex(c => `${c.valeur} de ${c.couleur}` === altCarte);
+    
+    if (indexCarte !== -1) {
+        carteDefausseActuelle = j.main.splice(indexCarte, 1)[0];
+        afficherCarteDefausse();
+        afficherMainJoueur(j.main);
+        jouerSon(sonPiocher);
+        
+        if (j.main.length === 0) return finDeManche(joueurActuel);
+        passerAuJoueurSuivant();
+    }
 });
 
 function piocherDansLeDeck() {
@@ -255,134 +475,48 @@ function piocherDansLeDeck() {
             carteDefausseActuelle = ancienneDefausse;
             afficherTable();
             alert("La pioche est vide ! Mélange de la défausse.");
-            if (deck.length === 0) { finDeManche('bloque'); return null; }
+            if (deck.length === 0) { finDeManche(-1); return null; }
         }
     }
     return deck.pop();
 }
 
-btnPoser.addEventListener("click", () => {
-    if (premierTourGlobal || mancheTerminee) return alert("Action impossible.");
-    const cartesSelectionneesHTML = document.querySelectorAll('#main-joueur .carte.selectionnee');
-    if (cartesSelectionneesHTML.length === 0) return alert("Sélectionnez des cartes.");
-
-    let cartesA_Poser = [];
-    cartesSelectionneesHTML.forEach(imgHTML => {
-        const carteObj = mainJoueur.find(c => `${c.valeur} de ${c.couleur}` === imgHTML.alt);
-        if (carteObj) cartesA_Poser.push(carteObj);
-    });
-
-    if (!estCombinaisonValide(cartesA_Poser)) return alert("Combinaison invalide.");
-
-    let pointsTotal = cartesA_Poser.reduce((sum, c) => sum + calculerPointsCarte(c), 0);
-    if (pointsTotal < 51 && !aPoseOuvertureJoueur) return alert(`Total : ${pointsTotal} pts. Il en faut 51.`);
-
-    aPoseOuvertureJoueur = true;
-    cartesA_Poser.forEach(carte => mainJoueur.splice(mainJoueur.indexOf(carte), 1));
-    combinaisonsTable.push(cartesA_Poser);
-    
-    afficherMainJoueur();
-    afficherTable();
-    mettreAJourUI();
-    jouerSon(sonPoser); // Son de validation
-});
-
-btnVoler.addEventListener("click", () => {
-    if (mancheTerminee) return;
-    const carteTableHTML = document.querySelector('.carte-table.selectionnee');
-    const cartesMainHTML = document.querySelectorAll('#main-joueur .carte.selectionnee');
-    if (!carteTableHTML || cartesMainHTML.length === 0) return alert("Sélectionnez une carte de la table ET de votre main.");
-
-    const altCarteVolee = carteTableHTML.alt;
-    let carteVolee = null, indexCombinaison = -1;
-    combinaisonsTable.forEach((comb, i) => {
-        const c = comb.find(c => `${c.valeur} de ${c.couleur}` === altCarteVolee);
-        if (c) { carteVolee = c; indexCombinaison = i; }
-    });
-
-    let cartesMain = [];
-    cartesMainHTML.forEach(imgHTML => {
-        const c = mainJoueur.find(c => `${c.valeur} de ${c.couleur}` === imgHTML.alt);
-        if (c) cartesMain.push(c);
-    });
-
-    let nouvelleCombinaison = [...cartesMain, carteVolee];
-    if (!estCombinaisonValide(nouvelleCombinaison)) return alert("Nouvelle combinaison invalide.");
-    if (combinaisonsTable[indexCombinaison].length - 1 < 3) return alert("Pas assez de cartes sur la table.");
-
-    combinaisonsTable[indexCombinaison].splice(combinaisonsTable[indexCombinaison].indexOf(carteVolee), 1);
-    cartesMain.forEach(c => mainJoueur.splice(mainJoueur.indexOf(c), 1));
-    combinaisonsTable.push(nouvelleCombinaison);
-
-    afficherMainJoueur();
-    afficherTable();
-    mettreAJourUI();
-    jouerSon(sonPoser); // Son de validation
-});
-
-btnPiocher.addEventListener("click", () => {
-    if (!estTourJoueur || aPioche || mancheTerminee) return;
-    let nouvelleCarte = piocherDansLeDeck();
-    if (!nouvelleCarte) return; 
-    mainJoueur.push(nouvelleCarte);
-    aPioche = true;
-    afficherMainJoueur();
-    mettreAJourUI();
-    jouerSon(sonPiocher); // Son de pioche
-});
-
-btnDefausser.addEventListener("click", () => {
-    if (!estTourJoueur || !aPioche || mancheTerminee) return;
-    const carteSelectionneeHTML = document.querySelector('#main-joueur .carte.selectionnee');
-    if (!carteSelectionneeHTML) return alert("Sélectionnez une carte à jeter.");
-    const altCarte = carteSelectionneeHTML.alt;
-    const indexCarte = mainJoueur.findIndex(c => `${c.valeur} de ${c.couleur}` === altCarte);
-    if (indexCarte !== -1) {
-        carteDefausseActuelle = mainJoueur.splice(indexCarte, 1)[0];
-        afficherCarteDefausse();
-        afficherMainJoueur();
-        jouerSon(sonPiocher); // Son de défausse
-        if (mainJoueur.length === 0) return finDeManche('joueur');
-        finirTourJoueur();
-    }
-});
-
-// --- CERVEAU DE L'INTELLIGENCE ARTIFICIELLE (IA) ---
-
-function finirTourJoueur() {
-    estTourJoueur = false;
-    aPioche = false;
+// ==========================================
+// GESTION DES TOURS & IA
+// ==========================================
+function passerAuJoueurSuivant() {
     premierTourGlobal = false; 
-    mettreAJourUI();
-    setTimeout(tourOrdinateur, 1500); 
+    joueurActuel = (joueurActuel + 1) % joueurs.length;
+    joueurs[joueurActuel].aPioche = false;
+    preparerTour();
 }
 
-function tourOrdinateur() {
+// IA Tour (Uniquement si 1 joueur)
+function tourIA() {
+    const j = joueurs[joueurActuel];
     if (mancheTerminee) return;
     
     let nouvelleCarte = piocherDansLeDeck();
     if (!nouvelleCarte) return;
-    mainOrdi.push(nouvelleCarte);
+    j.main.push(nouvelleCarte);
     mettreAJourUI();
 
     setTimeout(() => {
-        iaJoueCombinaisons();
+        if (!premierTourGlobal || j.aPose) {
+            iaJoueCombinaisons(j);
+        }
 
         setTimeout(() => {
-            let carteJetee = iaChoisitCarteAJeter();
-            mainOrdi.splice(mainOrdi.indexOf(carteJetee), 1);
+            let carteJetee = iaChoisitCarteAJeter(j);
+            j.main.splice(j.main.indexOf(carteJetee), 1);
             carteDefausseActuelle = carteJetee;
             
             afficherCarteDefausse();
             afficherTable();
-            mettreAJourUI();
-
-            if (mainOrdi.length === 0) return finDeManche('ordi');
-
-            estTourJoueur = true;
-            mettreAJourUI();
+            
+            if (j.main.length === 0) return finDeManche(joueurActuel);
+            passerAuJoueurSuivant();
         }, 1000);
-
     }, 1000);
 }
 
@@ -390,9 +524,7 @@ function iaTrouveCombinaisons(main) {
     let combinaisons = [];
     for (let val of valeurs) {
         let cartesMemeValeur = main.filter(c => c.valeur === val);
-        if (cartesMemeValeur.length >= 3) {
-            combinaisons.push(cartesMemeValeur.slice(0, cartesMemeValeur.length)); 
-        }
+        if (cartesMemeValeur.length >= 3) combinaisons.push(cartesMemeValeur.slice(0, cartesMemeValeur.length)); 
     }
     for (let coul of couleurs) {
         let cartesCouleur = main.filter(c => c.couleur === coul);
@@ -418,147 +550,114 @@ function iaTrouveCombinaisons(main) {
     return combinaisons;
 }
 
-function iaJoueCombinaisons() {
-    let combinaisonsPossibles = iaTrouveCombinaisons(mainOrdi);
+function iaJoueCombinaisons(j) {
+    let combinaisonsPossibles = iaTrouveCombinaisons(j.main);
     if (combinaisonsPossibles.length === 0) return;
 
-    if (!aPoseOuvertureOrdi) {
-        combinaisonsPossibles.sort((a, b) => {
-            let ptsA = a.reduce((s, c) => s + calculerPointsCarte(c), 0);
-            let ptsB = b.reduce((s, c) => s + calculerPointsCarte(c), 0);
-            return ptsB - ptsA;
-        });
-
-        let combinaisonsA_Poser = [];
-        let pointsTotal = 0;
-
+    if (!j.aPose) {
+        combinaisonsPossibles.sort((a, b) => b.reduce((s, c) => s + calculerPointsCarte(c), 0) - a.reduce((s, c) => s + calculerPointsCarte(c), 0));
+        let combinaisonsA_Poser = [], pointsTotal = 0;
         for (let comb of combinaisonsPossibles) {
-            let ptsComb = comb.reduce((s, c) => s + calculerPointsCarte(c), 0);
             combinaisonsA_Poser.push(comb);
-            pointsTotal += ptsComb;
+            pointsTotal += comb.reduce((s, c) => s + calculerPointsCarte(c), 0);
             if (pointsTotal >= 51) break; 
         }
-
         if (pointsTotal >= 51) {
             combinaisonsA_Poser.forEach(comb => {
-                comb.forEach(c => mainOrdi.splice(mainOrdi.indexOf(c), 1));
+                comb.forEach(c => j.main.splice(j.main.indexOf(c), 1));
                 combinaisonsTable.push(comb);
             });
-            aPoseOuvertureOrdi = true;
+            j.aPose = true;
             afficherTable();
         }
     } else {
         combinaisonsPossibles.forEach(comb => {
-            comb.forEach(c => mainOrdi.splice(mainOrdi.indexOf(c), 1));
+            comb.forEach(c => j.main.splice(j.main.indexOf(c), 1));
             combinaisonsTable.push(comb);
         });
         afficherTable();
     }
 }
 
-function iaChoisitCarteAJeter() {
-    let combinaisonsPossibles = iaTrouveCombinaisons(mainOrdi);
+function iaChoisitCarteAJeter(j) {
+    let combinaisonsPossibles = iaTrouveCombinaisons(j.main);
     let cartesUtiles = [];
-    combinaisonsPossibles.forEach(comb => {
-        comb.forEach(c => cartesUtiles.push(c));
-    });
-
-    let cartesInutiles = mainOrdi.filter(c => !cartesUtiles.includes(c));
+    combinaisonsPossibles.forEach(comb => comb.forEach(c => cartesUtiles.push(c)));
+    let cartesInutiles = j.main.filter(c => !cartesUtiles.includes(c));
 
     if (cartesInutiles.length > 0) {
-        if (niveauDifficulte === 'facile') {
-            return cartesInutiles[0];
-        } else if (niveauDifficulte === 'moyen') {
-            cartesInutiles.sort((a, b) => calculerPointsCarte(a) - calculerPointsCarte(b));
-            return cartesInutiles[0];
-        } else {
-            cartesInutiles.sort((a, b) => calculerPointsCarte(b) - calculerPointsCarte(a));
-            return cartesInutiles[0];
-        }
+        if (niveauDifficulte === 'facile') return cartesInutiles[0];
+        else if (niveauDifficulte === 'moyen') return cartesInutiles.sort((a, b) => calculerPointsCarte(a) - calculerPointsCarte(b))[0];
+        else return cartesInutiles.sort((a, b) => calculerPointsCarte(b) - calculerPointsCarte(a))[0];
     }
-
-    mainOrdi.sort((a, b) => calculerPointsCarte(a) - calculerPointsCarte(b));
-    return mainOrdi[0];
+    return j.main.sort((a, b) => calculerPointsCarte(a) - calculerPointsCarte(b))[0];
 }
 
-// --- FIN DE MANCHE ---
-function finDeManche(gagnant) {
+// ==========================================
+// FIN DE MANCHE
+// ==========================================
+function finDeManche(indexGagnant) {
     mancheTerminee = true;
     mettreAJourUI();
+    document.getElementById("zone-joueur").style.visibility = "visible";
 
-    let pointsJoueurManche = calculerPointsMain(mainJoueur);
-    let pointsOrdiManche = calculerPointsMain(mainOrdi);
+    let details = "";
+    let gagnantNom = indexGagnant !== -1 ? joueurs[indexGagnant].nom : "Personne";
+    if (indexGagnant === -1) alert("Pioche vide, on compte les points !");
+
+    joueurs.forEach((j, i) => {
+        if (i === indexGagnant) {
+            j.score += 0;
+        } else {
+            let pts = calculerPointsMain(j.main);
+            if (!j.aPose) pts = 100; // Règle Jacqueline
+            j.score += pts;
+            details += `${j.nom} a marqué : ${pts} pts<br>`;
+        }
+    });
+
+    afficherScores();
+
+    let titre = indexGagnant !== -1 ? `${gagnantNom} a gagné la manche ! 🎉` : "Manche bloquée !";
+    if (indexGagnant === joueurActuel && joueurs[joueurActuel].isIA) jouerSon(sonDefaite);
+    else if (indexGagnant === joueurActuel) jouerSon(sonVictoire);
+
+    let finPartie = joueurs.some(j => j.score >= 100);
     
-    if (gagnant === 'bloque') {
-        alert("Pioche vide, on compte les points !");
-    } else {
-        if (gagnant === 'joueur' && !aPoseOuvertureOrdi) pointsOrdiManche = 100;
-        if (gagnant === 'ordi' && !aPoseOuvertureJoueur) pointsJoueurManche = 100;
-        if (gagnant === 'joueur') pointsJoueurManche = 0;
-        if (gagnant === 'ordi') pointsOrdiManche = 0;
-    }
-
-    scoreJoueur += pointsJoueurManche;
-    scoreOrdi += pointsOrdiManche;
-    mettreAJourScores();
-
-    // JOUER LE SON DE VICTOIRE OU DÉFAITE
-    if (gagnant === 'joueur') jouerSon(sonVictoire);
-    else if (gagnant === 'ordi') jouerSon(sonDefaite);
-
-    let titre = gagnant === 'joueur' ? "Manche Gagnée ! 🎉" : (gagnant === 'ordi' ? "L'ordinateur gagne... 😢" : "Manche bloquée ! 🤝");
-    let texteDetail = `Vous avez marqué : ${pointsJoueurManche} pts<br>L'ordinateur a marqué : ${pointsOrdiManche} pts`;
-    
-    let texteFin = "";
-    if (scoreJoueur >= 100 || scoreOrdi >= 100) {
-        if (scoreJoueur >= 100 && scoreOrdi >= 100) texteFin = "Match nul !";
-        else if (scoreJoueur >= 100) texteFin = "Vous avez atteint 100 points. L'ordinateur remporte la partie !";
-        else texteFin = "L'ordinateur a atteint 100 points. Vous remportez la partie ! 🏆";
-        
-        titre = "Fin de la Partie !";
+    if (finPartie) {
+        titre = "Fin de la partie !";
         document.getElementById("btn-suivant").textContent = "Rejouer une partie";
         document.getElementById("btn-suivant").onclick = () => location.reload();
+        details += "<br><strong>Quelqu'un a atteint 100 points ! La partie est terminée.</strong>";
     } else {
         document.getElementById("btn-suivant").textContent = "Manche Suivante";
         document.getElementById("btn-suivant").onclick = () => demarrerManche();
     }
 
     document.getElementById("titre-victoire").textContent = titre;
-    document.getElementById("texte-victoire").innerHTML = texteFin;
-    document.getElementById("detail-points").innerHTML = texteDetail;
+    document.getElementById("texte-victoire").innerHTML = "";
+    document.getElementById("detail-points").innerHTML = details;
     document.getElementById("ecran-victoire").style.display = "flex";
 }
-// --- GESTION DES BOUTONS D'INTERFACE (PLEIN ÉCRAN & RÈGLES) ---
 
-// 1. Bouton Plein Écran
-const btnFullscreen = document.getElementById("btn-fullscreen");
-if (btnFullscreen) {
-    btnFullscreen.addEventListener("click", () => {
-        if (!document.fullscreenElement) {
-            // Passer en plein écran
-            document.documentElement.requestFullscreen().catch(err => {
-                console.log(`Erreur plein écran : ${err.message}`);
-            });
-            btnFullscreen.textContent = "✖"; // Icône pour quitter
-        } else {
-            // Quitter le plein écran
-            document.exitFullscreen();
-            btnFullscreen.textContent = "⛶"; // Icône pour entrer
-        }
-    });
-}
+// ==========================================
+// INTERFACE (Plein écran, Règles, Son)
+// ==========================================
+document.getElementById("btn-son").addEventListener("click", function() {
+    estMuet = !estMuet;
+    this.textContent = estMuet ? "🔇" : "🔊";
+});
 
-// 2. Bouton Règles
-const btnRegles = document.getElementById("btn-regles");
+document.getElementById("btn-fullscreen").addEventListener("click", function() {
+    if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen();
+        this.textContent = "✖";
+    } else {
+        document.exitFullscreen();
+        this.textContent = "⛶";
+    }
+});
+
 const modalRegles = document.getElementById("modal-regles");
-const btnFermerRegles = document.getElementById("btn-fermer-regles");
-
-if (btnRegles && modalRegles) {
-    btnRegles.addEventListener("click", () => {
-        modalRegles.style.display = "flex"; // Afficher
-    });
-    
-    btnFermerRegles.addEventListener("click", () => {
-        modalRegles.style.display = "none"; // Cacher
-    });
-}
+document.getElementById("btn-regles").addEventListener("click", () => modalRegles.style.display = "flex");
+document.getElementById("btn-fermer-regles").addEventListener("click", () => modalRegles.style.display = "none");
