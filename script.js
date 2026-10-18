@@ -380,15 +380,58 @@ btnPoser.addEventListener("click", () => {
     if (premierTourGlobal || mancheTerminee || j.isIA) return;
     
     const cartesSelectionneesHTML = document.querySelectorAll('#main-joueur .carte.selectionnee');
-    if (cartesSelectionneesHTML.length === 0) return alert("Sélectionnez des cartes.");
+    const carteTableHTML = document.querySelector('.carte-table.selectionnee');
 
-    let cartesA_Poser = [];
+    if (cartesSelectionneesHTML.length === 0 && !carteTableHTML) return alert("Sélectionnez des cartes.");
+
+    let cartesHand = [];
     cartesSelectionneesHTML.forEach(imgHTML => {
         const carteObj = j.main.find(c => `${c.valeur} de ${c.couleur}` === imgHTML.alt);
-        if (carteObj) cartesA_Poser.push(carteObj);
+        if (carteObj) cartesHand.push(carteObj);
     });
 
-    let groupes = decouperEnCombinaisons(cartesA_Poser);
+    // =======================================================
+    // CAS 1 : Le joueur veut COMPLÉTER une combinaison existante
+    // =======================================================
+    if (carteTableHTML) {
+        if (!j.aPose) return alert("Vous devez d'abord faire votre ouverture de 51 points pour compléter la table !");
+        if (cartesHand.length === 0) return alert("Sélectionnez les cartes de votre main que vous voulez ajouter.");
+
+        const altTable = carteTableHTML.alt;
+        let combIndex = -1;
+        
+        // On cherche à quelle combinaison appartient la carte sélectionnée sur la table
+        combinaisonsTable.forEach((comb, i) => {
+            if (comb.some(c => `${c.valeur} de ${c.couleur}` === altTable)) combIndex = i;
+        });
+
+        if (combIndex !== -1) {
+            // On crée la nouvelle combinaison (table + main)
+            let nouvelleComb = [...combinaisonsTable[combIndex], ...cartesHand];
+            
+            // On vérifie si la fusion est valide (ex: 8-9-10 + 6-7 = 6-7-8-9-10)
+            if (estCombinaisonValide(nouvelleComb)) {
+                // C'est valide ! On met à jour la table et on retire les cartes de la main
+                combinaisonsTable[combIndex] = nouvelleComb;
+                cartesHand.forEach(c => j.main.splice(j.main.indexOf(c), 1));
+                
+                afficherMainJoueur(j.main);
+                afficherTable();
+                mettreAJourUI();
+                jouerSon(sonPoser);
+                return; // On s'arrête là, c'est réussi
+            } else {
+                return alert("Impossible de compléter : ces cartes ne s'ajoutent pas à cette combinaison.");
+            }
+        }
+    }
+
+    // =======================================================
+    // CAS 2 : Le joueur veut POSER une NOUVELLE combinaison
+    // =======================================================
+    if (cartesHand.length === 0) return;
+
+    let groupes = decouperEnCombinaisons(cartesHand);
 
     if (!groupes) return alert("Combinaison invalide.");
 
@@ -397,7 +440,7 @@ btnPoser.addEventListener("click", () => {
     if (pointsTotal < 51 && !j.aPose) return alert(`Total : ${pointsTotal} pts. Il en faut 51.`);
 
     j.aPose = true;
-    cartesA_Poser.forEach(carte => j.main.splice(j.main.indexOf(carte), 1));
+    cartesHand.forEach(carte => j.main.splice(j.main.indexOf(carte), 1));
     groupes.forEach(grp => combinaisonsTable.push(grp));
     
     afficherMainJoueur(j.main);
