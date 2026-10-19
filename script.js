@@ -266,13 +266,10 @@ function afficherTable() {
             const img = creerImageCarte(carte, true);
             img.addEventListener("click", () => {
                 if (!mancheTerminee) {
-                    if(combinaison.length > 3) {
-                        document.querySelectorAll('.carte-table').forEach(c => c.classList.remove('selectionnee'));
-                        img.classList.add("selectionnee");
-                        jouerSon(sonPiocher);
-                    } else {
-                        alert("Impossible de voler : cette combinaison n'a que 3 cartes.");
-                    }
+                    // On autorise la sélection de n'importe quelle carte sur la table
+                    document.querySelectorAll('.carte-table').forEach(c => c.classList.remove('selectionnee'));
+                    img.classList.add("selectionnee");
+                    jouerSon(sonPiocher);
                 }
             });
             divGroupe.appendChild(img);
@@ -450,7 +447,7 @@ btnPoser.addEventListener("click", () => {
         if (carteObj) cartesHand.push(carteObj);
     });
 
-    // CAS 1 : COMPLÉTER UNE COMBINAISON EXISTANTE
+        // CAS 1 : COMPLÉTER UNE COMBINAISON EXISTANTE
     if (carteTableHTML) {
         if (!j.aPose) return alert("Vous devez d'abord faire votre ouverture de 51 points pour compléter la table !");
         if (cartesHand.length === 0) return alert("Sélectionnez les cartes de votre main que vous voulez ajouter.");
@@ -464,6 +461,8 @@ btnPoser.addEventListener("click", () => {
 
         if (combIndex !== -1) {
             let nouvelleComb = [...combinaisonsTable[combIndex], ...cartesHand];
+            
+            // On vérifie si c'est un brelan valide (max 4) ou une suite valide
             if (estCombinaisonValide(nouvelleComb)) {
                 combinaisonsTable[combIndex] = nouvelleComb;
                 cartesHand.forEach(c => j.main.splice(j.main.indexOf(c), 1));
@@ -473,7 +472,7 @@ btnPoser.addEventListener("click", () => {
                 jouerSon(sonPoser);
                 return; 
             } else {
-                return alert("Impossible de compléter : ces cartes ne s'ajoutent pas à cette combinaison.");
+                return alert("Impossible de compléter : ces cartes ne s'ajoutent pas à cette combinaison (ou le brelan dépasse 4 cartes).");
             }
         }
     }
