@@ -21,29 +21,47 @@
         .pli-droite { right: -60px; top: 50%; transform: translateY(-50%) rotate(-90deg); z-index: 1; }
         #infos-coinche { position: absolute; top: 20px; right: 20px; text-align: right; background: rgba(0,0,0,0.6); padding: 15px; border-radius: 10px; color: white; border: 1px solid var(--or); min-width: 220px; }
         .contrat-box { font-size: 20px; font-weight: bold; margin-top: 10px; color: #f1c40f; }
-        #main-coinche { display: flex; justify-content: center; gap: 10px; margin-top: auto; padding-bottom: 20px; }
+        #main-coinche { display: flex; justify-content: center; gap: 10px; margin-top: auto; padding-bottom: 20px; position: relative; z-index: 500; }
         .carte-coinche { width: 80px; height: 120px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.5); cursor: pointer; transition: transform 0.2s; }
         .carte-coinche:hover { transform: translateY(-15px); }
-        #modal-encheres { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); display: none; flex-direction: column; justify-content: center; align-items: center; z-index: 1000; backdrop-filter: blur(5px); }
-        .encheres-box { background: #2c3e50; padding: 30px; border-radius: 15px; border: 2px solid var(--or); text-align: center; color: white; max-width: 600px; width: 90%; }
-        .boutons-suit { display: flex; gap: 10px; justify-content: center; margin: 15px 0; }
-        .btn-suit { font-size: 24px; padding: 10px 15px; border-radius: 8px; cursor: pointer; border: none; background: white; transition: 0.2s; }
-        .btn-suit:hover { transform: scale(1.1); }
-        .boutons-valeur { display: flex; gap: 5px; flex-wrap: wrap; justify-content: center; margin-bottom: 20px; }
-        .btn-valeur { padding: 10px 15px; border-radius: 5px; border: 1px solid #ccc; background: #34495e; color: white; cursor: pointer; font-weight: bold; }
+        
+        #modal-encheres { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: transparent !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important; display: none; flex-direction: column; align-items: center; justify-content: flex-start; padding-top: 20px; z-index: 1000; }
+        .encheres-box { background: #2c3e50; padding: 15px 20px; border-radius: 15px; border: 2px solid var(--or); text-align: center; color: white; max-width: 800px; width: 95%; max-height: 60vh; overflow-y: auto; box-shadow: 0 10px 30px rgba(0,0,0,0.8); }
+        .historique { display: flex; justify-content: center; gap: 10px; margin-bottom: 15px; }
+        .annonce-joueur { background: rgba(255,255,255,0.1); padding: 10px; border-radius: 8px; min-width: 100px; font-size: 14px; }
+        .annonce-joueur strong { display: block; color: var(--or); margin-bottom: 5px; }
+        .annonce-joueur.actif { border: 2px solid var(--or); background: rgba(241, 196, 15, 0.2); }
+        .boutons-encheres { display: flex; flex-wrap: wrap; gap: 5px; justify-content: center; margin-bottom: 15px; }
+        .btn-valeur { padding: 8px 12px; border-radius: 5px; border: 1px solid #ccc; background: #34495e; color: white; cursor: pointer; font-weight: bold; font-size: 14px; }
         .btn-valeur:hover { background: var(--or); color: black; }
-        .btn-passer { background: #e74c3c; color: white; font-size: 18px; padding: 10px 30px; border-radius: 20px; cursor: pointer; border: none; font-weight: bold; margin-top: 10px;}
-        #zone-coinche { text-align: center; margin-top: 20px; display: none; }
-        .btn-coinche { background: #c0392b; color: white; font-size: 20px; padding: 10px 30px; border-radius: 10px; border: 2px solid #fff; cursor: pointer; font-weight: bold; animation: pulse 1s infinite; }
+        .btn-valeur.speciale { background: #c0392b; border-color: #fff; }
+        .boutons-couleur { display: flex; gap: 10px; justify-content: center; margin-bottom: 15px; }
+        .btn-couleur { font-size: 28px; padding: 8px 20px; border-radius: 8px; cursor: pointer; border: none; background: white; transition: 0.2s; }
+        .btn-couleur:hover { transform: scale(1.1); }
+        .btn-couleur.rouge { color: #e74c3c !important; }
+        .btn-couleur.noir { color: #000000 !important; }
+        .btn-passer { background: #7f8c8d; color: white; font-size: 18px; padding: 10px 30px; border-radius: 20px; cursor: pointer; border: none; font-weight: bold; }
+        .btn-passer:hover { background: #e74c3c; }
+        #zone-coinche { text-align: center; margin-top: 15px; display: none; border-top: 1px solid #555; padding-top: 15px;}
+        .btn-coinche { background: #c0392b; color: white; font-size: 18px; padding: 10px 30px; border-radius: 10px; border: 2px solid #fff; cursor: pointer; font-weight: bold; animation: pulse 1s infinite; }
+
+        #toast-container { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); z-index: 9999; display: flex; flex-direction: column; gap: 10px; align-items: center; pointer-events: none; }
+        .toast { background: linear-gradient(135deg, #2c3e50, #1a252f); color: var(--or); padding: 12px 25px; border-radius: 30px; border: 2px solid var(--or); font-family: 'Cinzel', serif; font-size: 18px; font-weight: bold; box-shadow: 0 10px 25px rgba(0,0,0,0.8), 0 0 15px rgba(241, 196, 15, 0.3); animation: slideDown 0.3s ease-out forwards, fadeOut 0.5s ease-in 2.5s forwards; text-align: center; text-shadow: 1px 1px 2px rgba(0,0,0,0.8); }
+        @keyframes slideDown { from { transform: translateY(-50px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        @keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
+        .carte-pli { transition: transform 0.8s cubic-bezier(0.5, -0.5, 0.5, 1.5), opacity 0.8s; }
+        .pli-bas.collect { transform: translate(0, 600px) scale(0.3); opacity: 0; }
+        .pli-gauche.collect { transform: translate(-800px, 0) rotate(90deg) scale(0.3); opacity: 0; }
+        .pli-haut.collect { transform: translate(0, -600px) rotate(180deg) scale(0.3); opacity: 0; }
+        .pli-droite.collect { transform: translate(800px, 0) rotate(-90deg) scale(0.3); opacity: 0; }
     </style>
 </head>
 <body>
+    <div id="toast-container"></div>
 
-    <!-- ÉCRAN D'ACCUEIL COINCHE -->
     <div id="ecran-accueil" style="display: flex;">
         <button class="btn-retour" onclick="window.location.href='index.html'">⬅ Retour au menu</button>
         <h1>La Coinche</h1>
-        
         <div class="menu-container">
             <div class="menu-card">
                 <h2 class="menu-titre">🌐 Jouer en ligne</h2>
@@ -54,11 +72,8 @@
                         <button onclick="rejoindreSalonCoinche()" class="btn-action btn-orange">Rejoindre</button>
                     </div>
                 </div>
-                <div id="statut-connexion" style="text-align: center; margin-top: 15px; color: var(--or); font-weight: bold;">
-                    Connecté à Firebase...
-                </div>
+                <div id="statut-connexion" style="text-align: center; margin-top: 15px; color: var(--or); font-weight: bold;">Connecté à Firebase...</div>
             </div>
-
             <div class="menu-card">
                 <h2 class="menu-titre">💻 Jouer en local</h2>
                 <div id="section-difficulte">
@@ -74,16 +89,11 @@
         </div>
     </div>
 
-    <!-- ÉCRAN D'ATTENTE (LOBBY) EN LIGNE -->
     <div id="ecran-attente" style="display: none; flex-direction: column; align-items: center; justify-content: center; height: 100vh; background: #2b1d14; color: white;">
         <h1 style="color: var(--or); font-family: 'Cinzel';">Salon d'attente</h1>
         <h2 style="margin-top: 20px;">Code à partager : <span id="code-salon-affiche" style="color: #3498db; font-size: 2em; letter-spacing: 5px;"></span></h2>
-        
-        <div id="liste-joueurs-salon" style="margin: 30px 0; font-size: 20px; display: flex; flex-direction: column; gap: 10px; background: rgba(0,0,0,0.5); padding: 20px; border-radius: 10px; min-width: 300px;">
-            <!-- Joueurs générés par JS -->
-        </div>
-        
-        <button id="btn-lancer-partie-en-ligne" onclick="demarrerCoincheEnLigne()" class="btn-action btn-vert" style="display: none; font-size: 20px; padding: 15px 40px;">LANCER LA PARTIE (Compléter avec IA)</button>
+        <div id="liste-joueurs-salon" style="margin: 30px 0; font-size: 20px; display: flex; flex-direction: column; gap: 10px; background: rgba(0,0,0,0.5); padding: 20px; border-radius: 10px; min-width: 300px;"></div>
+        <button id="btn-lancer-partie-en-ligne" onclick="demarrerCoincheEnLigne()" class="btn-action btn-vert" style="display: none; font-size: 20px; padding: 15px 40px;">LANCER LA PARTIE</button>
         <button onclick="window.location.reload()" class="btn-action btn-rouge" style="margin-top: 15px;">Quitter le salon</button>
     </div>
 
@@ -100,26 +110,36 @@
             <p id="affichage-preneur" style="font-size: 14px; margin-top: 5px;">Preneur : -</p>
             <p style="margin-top: 10px; font-size: 14px;">Nous : <span id="score-eq1">0</span> pts</p>
             <p style="font-size: 14px;">Eux : <span id="score-eq2">0</span> pts</p>
-            <div id="info-belote-rebelote" style="color: var(--or); margin-top: 10px; font-weight: bold; display: none;">Belote !</div>
         </div>
 
         <div id="main-coinche"></div>
+        <button id="btn-annonces" onclick="annoncerPoints()" class="btn-action btn-orange" style="display: none; position: absolute; bottom: 150px; right: 20px; z-index: 100; padding: 15px 25px; font-size: 18px; border: 2px solid white; box-shadow: 0 0 20px #e67e22;">
+            🗣️ Annoncer (Tierce/50/100)
+        </button>
         <button class="btn-retour" onclick="window.location.href='index.html'" style="z-index: 2000;">⬅ Quitter</button>
 
         <div id="modal-encheres">
             <div class="encheres-box">
-                <h2 style="color: var(--or); font-family: 'Cinzel', serif;">Phase d'enchères</h2>
-                <p id="message-enchere" style="margin-bottom: 15px;">À vous de parler !</p>
-                <div class="boutons-suit" id="choix-atout">
-                    <button class="btn-suit" style="color:#e74c3c" onclick="selectionnerAtout('coeur', this)">♥</button>
-                    <button class="btn-suit" style="color:#e74c3c" onclick="selectionnerAtout('carreau', this)">♦</button>
-                    <button class="btn-suit" style="color:#2c3e50" onclick="selectionnerAtout('trefle', this)">♣</button>
-                    <button class="btn-suit" style="color:#2c3e50" onclick="selectionnerAtout('pique', this)">♠</button>
+                <h2 style="color: var(--or); font-family: 'Cinzel', serif; margin-bottom: 15px;">Phase d'enchères</h2>
+                <div class="historique" id="historique-encheres">
+                    <div class="annonce-joueur" id="hist-j0"><strong>Vous</strong>-</div>
+                    <div class="annonce-joueur" id="hist-j1"><strong>Gauche</strong>-</div>
+                    <div class="annonce-joueur" id="hist-j2"><strong>Partenaire</strong>-</div>
+                    <div class="annonce-joueur" id="hist-j3"><strong>Droite</strong>-</div>
                 </div>
-                <div class="boutons-valeur" id="choix-valeur"></div>
-                <button class="btn-passer" onclick="passerEnchere()">Passer</button>
+                <p id="message-enchere" style="margin-bottom: 15px; font-weight: bold; color: #3498db;">À vous de parler !</p>
+                <div id="zone-choix-atout">
+                    <div class="boutons-couleur" id="choix-atout">
+                        <button class="btn-couleur rouge" onclick="selectionnerAtout('coeur', this)">♥</button>
+                        <button class="btn-couleur rouge" onclick="selectionnerAtout('carreau', this)">♦</button>
+                        <button class="btn-couleur noir" onclick="selectionnerAtout('trefle', this)">♣</button>
+                        <button class="btn-couleur noir" onclick="selectionnerAtout('pique', this)">♠</button>
+                    </div>
+                    <div class="boutons-encheres" id="choix-valeur"></div>
+                </div>
+                <button class="btn-passer" id="btn-passer-action" onclick="passerEnchere()">Passer</button>
                 <div id="zone-coinche">
-                    <p style="color:#ff6b6b; margin-bottom: 10px;">L'adversaire a annoncé un contrat !</p>
+                    <p style="color:#ff6b6b; margin-bottom: 10px;">Le contrat est annoncé ! Voulez-vous coincher ?</p>
                     <button class="btn-coinche" onclick="coincher()">COINCHER !</button>
                 </div>
             </div>

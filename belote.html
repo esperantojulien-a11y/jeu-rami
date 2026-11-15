@@ -21,23 +21,66 @@
         .pli-droite { right: -60px; top: 50%; transform: translateY(-50%) rotate(-90deg); z-index: 1; }
         #infos-belote { position: absolute; top: 20px; right: 20px; text-align: right; background: rgba(0,0,0,0.6); padding: 15px; border-radius: 10px; color: white; border: 1px solid var(--or); min-width: 200px; }
         .atout-box { font-size: 24px; font-weight: bold; margin-top: 10px; }
-        #main-belote { display: flex; justify-content: center; gap: 10px; margin-top: auto; padding-bottom: 20px; }
+        #main-belote { display: flex; justify-content: center; gap: 10px; margin-top: auto; padding-bottom: 20px; position: relative; z-index: 500; }
         .carte-belote { width: 80px; height: 120px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.5); cursor: pointer; transition: transform 0.2s; }
         .carte-belote:hover { transform: translateY(-15px); }
-        #modal-encheres { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); display: none; flex-direction: column; justify-content: center; align-items: center; z-index: 1000; backdrop-filter: blur(5px); }
-        .encheres-box { background: #2c3e50; padding: 30px; border-radius: 15px; border: 2px solid var(--or); text-align: center; color: white; max-width: 500px; }
+        
+        /* --- MODAL ENCHERES BELOTE (Sans flou) --- */
+        #modal-encheres { 
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
+            background: transparent !important; 
+            backdrop-filter: none !important; 
+            -webkit-backdrop-filter: none !important;
+            display: none; flex-direction: column; align-items: center; justify-content: flex-start; 
+            padding-top: 20px; z-index: 1000; 
+        }
+        .encheres-box { 
+            background: #2c3e50; padding: 20px; border-radius: 15px; border: 2px solid var(--or); 
+            text-align: center; color: white; max-width: 500px; box-shadow: 0 10px 30px rgba(0,0,0,0.8);
+        }
         .boutons-atout { display: flex; gap: 15px; justify-content: center; margin-top: 20px; }
         .btn-atout { font-size: 30px; padding: 10px 20px; border-radius: 10px; cursor: pointer; border: none; background: white; transition: transform 0.2s; }
         .btn-atout:hover { transform: scale(1.1); }
-        .btn-atout.rouge { color: #e74c3c; }
-        .btn-atout.noir { color: #2c3e50; }
+        .btn-atout.rouge { color: #e74c3c !important; }
+        .btn-atout.noir { color: #000000 !important; }
+        
         .btn-passer { background: #7f8c8d; color: white; font-size: 18px; padding: 10px 30px; margin-top: 20px; border-radius: 20px; cursor: pointer; border: none; font-weight: bold;}
         .btn-passer:hover { background: #e74c3c; }
+
+        /* --- NOTIFICATIONS ÉLÉGANTES (TOASTS) --- */
+        #toast-container {
+            position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
+            z-index: 9999; display: flex; flex-direction: column; gap: 10px; align-items: center;
+            pointer-events: none; 
+        }
+        .toast {
+            background: linear-gradient(135deg, #2c3e50, #1a252f);
+            color: var(--or);
+            padding: 12px 25px;
+            border-radius: 30px;
+            border: 2px solid var(--or);
+            font-family: 'Cinzel', serif;
+            font-size: 18px;
+            font-weight: bold;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.8), 0 0 15px rgba(241, 196, 15, 0.3);
+            animation: slideDown 0.3s ease-out forwards, fadeOut 0.5s ease-in 2.5s forwards;
+            text-align: center;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
+        }
+        @keyframes slideDown { from { transform: translateY(-50px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        @keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
+
+        /* --- ANIMATION DE RAMASSAGE DES CARTES --- */
+        .carte-pli { transition: transform 0.8s cubic-bezier(0.5, -0.5, 0.5, 1.5), opacity 0.8s; }
+        .pli-bas.collect { transform: translate(0, 600px) scale(0.3); opacity: 0; }
+        .pli-gauche.collect { transform: translate(-800px, 0) rotate(90deg) scale(0.3); opacity: 0; }
+        .pli-haut.collect { transform: translate(0, -600px) rotate(180deg) scale(0.3); opacity: 0; }
+        .pli-droite.collect { transform: translate(800px, 0) rotate(-90deg) scale(0.3); opacity: 0; }
     </style>
 </head>
 <body>
+    <div id="toast-container"></div>
 
-    <!-- ÉCRAN D'ACCUEIL BELOTE -->
     <div id="ecran-accueil" style="display: flex;">
         <button class="btn-retour" onclick="window.location.href='index.html'">⬅ Retour au menu</button>
         <h1>La Belote</h1>
@@ -52,9 +95,7 @@
                         <button onclick="rejoindreSalonBelote()" class="btn-action btn-orange">Rejoindre</button>
                     </div>
                 </div>
-                <div id="statut-connexion" style="text-align: center; margin-top: 15px; color: var(--or); font-weight: bold;">
-                    Connecté à Firebase...
-                </div>
+                <div id="statut-connexion" style="text-align: center; margin-top: 15px; color: var(--or); font-weight: bold;">Connecté à Firebase...</div>
             </div>
 
             <div class="menu-card">
@@ -72,20 +113,14 @@
         </div>
     </div>
 
-    <!-- ÉCRAN D'ATTENTE (LOBBY) EN LIGNE -->
     <div id="ecran-attente" style="display: none; flex-direction: column; align-items: center; justify-content: center; height: 100vh; background: #2b1d14; color: white;">
         <h1 style="color: var(--or); font-family: 'Cinzel';">Salon d'attente</h1>
         <h2 style="margin-top: 20px;">Code à partager : <span id="code-salon-affiche" style="color: #3498db; font-size: 2em; letter-spacing: 5px;"></span></h2>
-        
-        <div id="liste-joueurs-salon" style="margin: 30px 0; font-size: 20px; display: flex; flex-direction: column; gap: 10px; background: rgba(0,0,0,0.5); padding: 20px; border-radius: 10px; min-width: 300px;">
-            <!-- Joueurs générés par JS -->
-        </div>
-        
-        <button id="btn-lancer-partie-en-ligne" onclick="demarrerBeloteEnLigne()" class="btn-action btn-vert" style="display: none; font-size: 20px; padding: 15px 40px;">LANCER LA PARTIE (Compléter avec IA)</button>
+        <div id="liste-joueurs-salon" style="margin: 30px 0; font-size: 20px; display: flex; flex-direction: column; gap: 10px; background: rgba(0,0,0,0.5); padding: 20px; border-radius: 10px; min-width: 300px;"></div>
+        <button id="btn-lancer-partie-en-ligne" onclick="demarrerBeloteEnLigne()" class="btn-action btn-vert" style="display: none; font-size: 20px; padding: 15px 40px;">LANCER LA PARTIE</button>
         <button onclick="window.location.reload()" class="btn-action btn-rouge" style="margin-top: 15px;">Quitter le salon</button>
     </div>
 
-    <!-- LA TABLE DE JEU -->
     <div id="table-belote" style="display: none;">
         <div class="adversaire-haut"><div class="badge-joueur" id="nom-j2">Partenaire (IA)</div><img src="cartes/card_back_red.png" style="width: 50px; border-radius: 5px;"></div>
         <div class="adversaire-gauche"><div class="badge-joueur" id="nom-j1">Adversaire Gauche</div><img src="cartes/card_back_red.png" style="width: 50px; border-radius: 5px;"></div>
@@ -102,6 +137,9 @@
         </div>
 
         <div id="main-belote"></div>
+        <button id="btn-annonces" onclick="annoncerPoints()" class="btn-action btn-orange" style="display: none; position: absolute; bottom: 150px; right: 20px; z-index: 100; padding: 15px 25px; font-size: 18px; border: 2px solid white; box-shadow: 0 0 20px #e67e22;">
+            🗣️ Annoncer (Tierce/50/100)
+        </button>
         <button class="btn-retour" onclick="window.location.href='index.html'" style="z-index: 2000;">⬅ Quitter</button>
 
         <div id="modal-encheres">
