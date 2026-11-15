@@ -3,41 +3,123 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Le Grand Rami</title>
-    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700;900&display=swap" rel="stylesheet">
+    <title>Le Grand Jeu</title>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700;900&family=Montserrat:wght@400;700;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <!-- Écran d'accueil -->
-    <div id="ecran-accueil">
-        <h1>Le Grand Rami</h1>
+
+    <!-- ========================================== -->
+    <!-- MENU PRINCIPAL (SÉLECTION DU JEU)          -->
+    <!-- ========================================== -->
+    <div id="menu-principal">
+        <h1>Le Grand Jeu</h1>
+        <p class="sous-titre-menu">L'excellence des jeux de cartes</p>
         
-        <div class="section-accueil">
-            <p>Nombre de joueurs :</p>
-            <div class="boutons-difficulte">
-                <button onclick="setNbJoueurs(1)" id="btn-j1" class="btn-action btn-bleu actif">1 (Solo vs IA)</button>
-                <button onclick="setNbJoueurs(2)" id="btn-j2" class="btn-action btn-bleu">2 Joueurs</button>
-                <button onclick="setNbJoueurs(3)" id="btn-j3" class="btn-action btn-bleu">3 Joueurs</button>
-                <button onclick="setNbJoueurs(4)" id="btn-j4" class="btn-action btn-bleu">4 Joueurs</button>
+        <div class="grille-jeux">
+            <!-- CARTE RAMI -->
+            <div class="carte-jeu" onclick="ouvrirJeu('rami')">
+                <div class="icone-jeu">🃏</div>
+                <h2>Le Rami</h2>
+                <p>Combinaisons, stratégies et jokers.</p>
+                <div class="effet-brillance"></div>
+            </div>
+
+            <!-- CARTE BELOTE -->
+            <div class="carte-jeu" onclick="window.location.href='belote.html'">
+                <div class="icone-jeu icone-rouge">&#9829;</div> <!-- Le symbole Coeur -->
+                <h2>La Belote</h2>
+                <p>Le grand classique des jeux de plis par équipe.</p>
+                <div class="effet-brillance"></div>
+            </div>
+
+            <!-- CARTE COINCHE -->
+            <div class="carte-jeu bientot" onclick="alert('La Coinche arrive très bientôt !')">
+                <div class="icone-jeu icone-rouge">&#9830;</div> <!-- Le symbole Carreau -->
+                <h2>La Coinche</h2>
+                <p>Enchères, contrats et adrénaline.</p>
+                <span class="badge-bientot">Bientôt</span>
+                <div class="effet-brillance"></div>
             </div>
         </div>
-
-        <div class="section-accueil" id="section-difficulte">
-            <p>Niveau des IA :</p>
-            <div class="boutons-difficulte">
-                <button onclick="setDifficulte('facile')" id="btn-facile" class="btn-action btn-vert">Facile</button>
-                <button onclick="setDifficulte('moyen')" id="btn-moyen" class="btn-action btn-orange actif">Moyen</button>
-                <button onclick="setDifficulte('difficile')" id="btn-difficile" class="btn-action btn-rouge">Difficile</button>
-            </div>
-        </div>
-
-        <button onclick="lancerPartie()" class="btn-action btn-vert" style="margin-top: 30px; font-size: 24px; padding: 15px 50px;">JOUER</button>
     </div>
 
-    <!-- La table de jeu -->
-    <div id="table-de-jeu" style="display: none;">
+    <!-- ========================================== -->
+    <!-- ÉCRAN D'ACCUEIL DU RAMI                    -->
+    <!-- ========================================== -->
+    <div id="ecran-accueil" style="display: none;">
+        <button class="btn-retour" onclick="retourMenu()">⬅ Retour au menu</button>
+        <h1>Le Grand Rami</h1>
         
-        <!-- Tableau de bord -->
+        <div class="menu-container">
+            <!-- Bloc Multijoueur -->
+            <div class="menu-card">
+                <h2 class="menu-titre">🌐 Jouer en ligne</h2>
+                
+                <div class="boutons-ligne">
+                    <button onclick="creerSalon(false)" class="btn-action btn-bleu" id="btn-creer-salon" disabled>➕ Créer un salon public</button>
+                    <button onclick="creerSalon(true)" class="btn-action btn-rouge" id="btn-creer-salon-prive" disabled>🔒 Créer un salon privé</button>
+                </div>
+
+                <div class="separateur"></div>
+
+                <p class="menu-sous-titre">Rejoindre avec un code privé :</p>
+                <div class="input-group">
+                    <input type="text" id="input-salon" placeholder="Code (ex: A1B2C3)" maxlength="6">
+                    <button onclick="rejoindreSalon()" id="btn-rejoindre-salon" class="btn-action btn-orange" disabled>Rejoindre</button>
+                </div>
+
+                <div class="separateur"></div>
+
+                <p class="menu-sous-titre">Salons publics en attente :</p>
+                <div id="liste-salons" class="liste-salons">
+                    <p class="chargement">Recherche de parties...</p>
+                </div>
+            </div>
+
+            <!-- Bloc Local / IA -->
+            <div class="menu-card">
+                <h2 class="menu-titre">💻 Jouer en local / contre l'IA</h2>
+                
+                <p class="menu-sous-titre">Nombre de joueurs :</p>
+                <div class="boutons-grille">
+                    <button onclick="setNbJoueurs(1)" id="btn-j1" class="btn-action btn-bleu actif">1 Joueur</button>
+                    <button onclick="setNbJoueurs(2)" id="btn-j2" class="btn-action btn-bleu">2 Joueurs</button>
+                    <button onclick="setNbJoueurs(3)" id="btn-j3" class="btn-action btn-bleu">3 Joueurs</button>
+                    <button onclick="setNbJoueurs(4)" id="btn-j4" class="btn-action btn-bleu">4 Joueurs</button>
+                </div>
+
+                <div id="section-mode">
+                    <p class="menu-sous-titre">Mode de jeu :</p>
+                    <div class="boutons-ligne">
+                        <button onclick="setMode('ia')" id="btn-mode-ia" class="btn-action btn-orange actif">Contre des IA</button>
+                        <button onclick="setMode('local')" id="btn-mode-local" class="btn-action btn-vert">Entre amis</button>
+                    </div>
+                </div>
+
+                <div id="section-difficulte">
+                    <p class="menu-sous-titre">Niveau des IA :</p>
+                    <div class="boutons-ligne">
+                        <button onclick="setDifficulte('facile')" id="btn-facile" class="btn-action btn-vert">Facile</button>
+                        <button onclick="setDifficulte('moyen')" id="btn-moyen" class="btn-action btn-orange actif">Moyen</button>
+                        <button onclick="setDifficulte('difficile')" id="btn-difficile" class="btn-action btn-rouge">Difficile</button>
+                    </div>
+                </div>
+
+                <button onclick="lancerPartie()" class="btn-action btn-vert btn-jouer-principal">JOUER EN LOCAL</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Écran "Passe le PC" -->
+    <div id="ecran-passe">
+        <h1 id="titre-passe">Au tour du Joueur 2</h1>
+        <p>Passez l'ordinateur au joueur suivant.</p>
+        <button onclick="debutTourJoueur()" class="btn-action btn-vert" style="font-size: 20px; padding: 15px 40px; margin-top: 20px;">Je suis prêt !</button>
+    </div>
+
+        <!-- La table de jeu (Rami) -->
+    <div id="table-de-jeu" style="display: none;">
         <div id="tableau-bord">
             <div style="display: flex; gap: 10px;">
                 <button id="btn-son" class="btn-action" style="padding: 5px 15px; border-radius: 10px; background: rgba(0,0,0,0.6); font-size: 20px;">🔊</button>
@@ -47,20 +129,22 @@
             <div id="scores-container" style="display: flex; gap: 10px; flex-wrap: wrap;"></div>
         </div>
 
-        <!-- Adversaires -->
-        <div id="adversaires"></div>
+        <!-- Les 3 zones d'adversaires (placées en absolu en CSS) -->
+        <div id="adv-haut" class="zone-adversaire"></div>
+        <div id="adv-gauche" class="zone-adversaire"></div>
+        <div id="adv-droite" class="zone-adversaire"></div>
 
-        <!-- Zone centrale -->
+        <div id="statut-ia" style="display: none;">L'IA réfléchit...</div>
+        
         <div id="zone-centrale">
             <div id="pioche" class="pile">
                 <img src="cartes/card_back_red.png" alt="Pioche" class="carte-dos">
-                <span id="compteur-pioche">95</span>
+                <span id="compteur-pioche">108</span>
             </div>
             <div id="combinaisons"></div>
             <div id="defausse" class="pile"></div>
         </div>
 
-        <!-- Zone joueur -->
         <div id="zone-joueur">
             <div class="header-joueur">
                 <h2 id="info-joueur">Votre main</h2>
@@ -83,7 +167,7 @@
         <button id="btn-suivant" class="btn-action btn-vert" style="font-size: 20px; padding: 15px 40px;">Suivant</button>
     </div>
 
-    <!-- Fenêtre des règles -->
+    <!-- Fenêtre des règles du Rami -->
     <div id="modal-regles">
         <div class="contenu-regles">
             <h2>Règles du Rami</h2>
@@ -100,6 +184,39 @@
         </div>
     </div>
 
+    <!-- Firebase SDK -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getFirestore, doc, setDoc, getDoc, updateDoc, onSnapshot, serverTimestamp, collection, query, where } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyDGaDUUpg8ssYWtbJvQ2pxJ38gQAN5EKF0",
+            authDomain: "jeux-de-carte-multi.firebaseapp.com",
+            projectId: "jeux-de-carte-multi",
+            storageBucket: "jeux-de-carte-multi.firebasestorage.app",
+            messagingSenderId: "189668693295",
+            appId: "1:189668693295:web:b4e5f21fae692d797ebdda"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const auth = getAuth(app);
+
+        window.firebase = { db, auth, doc, setDoc, getDoc, updateDoc, onSnapshot, serverTimestamp, collection, query, where };
+
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                document.getElementById('btn-creer-salon').disabled = false;
+                document.getElementById('btn-creer-salon-prive').disabled = false;
+                document.getElementById('btn-rejoindre-salon').disabled = false;
+                if (typeof ecouterLobby === "function") ecouterLobby();
+            } else {
+                signInAnonymously(auth).catch(console.error);
+            }
+        });
+    </script>
+    
     <script src="script.js"></script>
 </body>
 </html>
