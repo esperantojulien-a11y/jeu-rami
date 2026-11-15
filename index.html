@@ -23,7 +23,7 @@
         </div>
 
         <div class="section-accueil" id="section-difficulte">
-            <p>Niveau de l'IA :</p>
+            <p>Niveau des IA :</p>
             <div class="boutons-difficulte">
                 <button onclick="setDifficulte('facile')" id="btn-facile" class="btn-action btn-vert">Facile</button>
                 <button onclick="setDifficulte('moyen')" id="btn-moyen" class="btn-action btn-orange actif">Moyen</button>
@@ -32,13 +32,6 @@
         </div>
 
         <button onclick="lancerPartie()" class="btn-action btn-vert" style="margin-top: 30px; font-size: 24px; padding: 15px 50px;">JOUER</button>
-    </div>
-
-    <!-- Écran "Passe le PC" -->
-    <div id="ecran-passe">
-        <h1 id="titre-passe">Au tour du Joueur 2</h1>
-        <p>Passez l'ordinateur au joueur suivant.</p>
-        <button onclick="debutTourJoueur()" class="btn-action btn-vert" style="font-size: 20px; padding: 15px 40px; margin-top: 20px;">Je suis prêt !</button>
     </div>
 
     <!-- La table de jeu -->
@@ -51,9 +44,7 @@
                 <button id="btn-regles" class="btn-action" style="padding: 5px 15px; border-radius: 10px; background: rgba(0,0,0,0.6); font-size: 20px;">📖</button>
                 <button id="btn-fullscreen" class="btn-action" style="padding: 5px 15px; border-radius: 10px; background: rgba(0,0,0,0.6); font-size: 20px;">⛶</button>
             </div>
-            
-            <!-- Les scores s'afficheront ici dynamiquement -->
-            <div id="scores-container" style="display: flex; gap: 10px;"></div>
+            <div id="scores-container" style="display: flex; gap: 10px; flex-wrap: wrap;"></div>
         </div>
 
         <!-- Adversaires -->
@@ -63,7 +54,7 @@
         <div id="zone-centrale">
             <div id="pioche" class="pile">
                 <img src="cartes/card_back_red.png" alt="Pioche" class="carte-dos">
-                <span id="compteur-pioche">91</span>
+                <span id="compteur-pioche">95</span>
             </div>
             <div id="combinaisons"></div>
             <div id="defausse" class="pile"></div>
@@ -97,14 +88,12 @@
         <div class="contenu-regles">
             <h2>Règles du Rami</h2>
             <ul>
-                <li><strong>Compléter :</strong> Vous pouvez ajouter une ou plusieurs cartes de votre main à une combinaison déjà posée sur la table (ex: ajouter un 6 et un 7 à une suite 8-9-10).</li>
-                <li><strong>Limite :</strong> Un brelan (ou carré) ne peut pas dépasser <strong>4 cartes</strong> (une de chaque couleur).</li>
-                <li><strong>Matériel :</strong> 2 jeux de 52 cartes (sans jokers).</li>
+                <li><strong>Jokers (Atouts) :</strong> 4 jokers dans le jeu. Ils remplacent n'importe quelle carte (max 1 par combinaison de 3, max 2 par combinaison de 4) et valent 0 point.</li>
+                <li><strong>Compléter :</strong> Ajoutez une ou plusieurs cartes à une combinaison existante.</li>
+                <li><strong>Limite :</strong> Un brelan ne peut pas dépasser 4 cartes (couleurs différentes).</li>
                 <li><strong>But :</strong> Se débarrasser de toutes ses cartes.</li>
-                <li><strong>Ouverture :</strong> Poser des combinaisons (brelan ou suite) totalisant au moins <strong>51 points</strong>.</li>
-                <li><strong>Premier tour :</strong> Impossible d'ouvrir au tout premier tour.</li>
-                <li><strong>Vol de cartes :</strong> Voler une carte sur une combinaison de 4+ cartes pour compléter sa main.</li>
-                <li><strong>Valeur :</strong> As = 1 ou 11, Figures = 10, autres = valeur faciale.</li>
+                <li><strong>Ouverture :</strong> Poser des combinaisons totalisant au moins <strong>51 points</strong> (avec au moins 1 tierce et 1 brelan).</li>
+                <li><strong>Vol de cartes :</strong> Voler une ou plusieurs cartes sur une combinaison pour compléter sa main (il doit toujours rester au moins 3 cartes sur la table). Impossible de voler un Joker.</li>
                 <li><strong>Fin :</strong> Le premier à 100 points perd la partie.</li>
             </ul>
             <button id="btn-fermer-regles" class="btn-action btn-rouge" style="margin-top: 20px; width: 100%;">Fermer</button>
