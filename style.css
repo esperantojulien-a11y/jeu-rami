@@ -1,1070 +1,481 @@
-// ==========================================
-// NAVIGATION MENU
-// ==========================================
-function ouvrirJeu(nomJeu) {
-    if (nomJeu === 'rami') {
-        document.getElementById('menu-principal').style.display = 'none';
-        document.getElementById('ecran-accueil').style.display = 'flex';
-    }
+/* ========================================== */
+/* --- VARIABLES ET RESET ---                 */
+/* ========================================== */
+:root {
+    --bois-sombre: #2b1d14;
+    --bois-clair: #4e342e;
+    --feutrine: #1e8449;
+    --feutrine-fonce: #145a32;
+    --or: #f1c40f;
+    --or-clair: #fffb96;
+    --or-fonce: #b8860b;
 }
 
-function retourMenu() {
-    document.getElementById('ecran-accueil').style.display = 'none';
-    document.getElementById('table-de-jeu').style.display = 'none';
-    document.getElementById('menu-principal').style.display = 'flex';
-    mancheTerminee = true;
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    font-family: 'Montserrat', sans-serif;
+    user-select: none;
 }
 
-// ==========================================
-// RÉSEAU ET MULTIJOUEUR (FIREBASE)
-// ==========================================
-let currentUser = null;
-let currentRoomId = null;
-let unsubscribeRoom = null;
-let unsubscribeLobby = null;
-let isHost = false;
-let gameType = "rami";
-
-window.addEventListener('load', () => {
-    if (window.firebase) {
-        window.firebase.auth.onAuthStateChanged((user) => {
-            currentUser = user;
-        });
-    }
-});
-
-function ecouterLobby() {
-    if (unsubscribeLobby) unsubscribeLobby();
-
-    const q = window.firebase.query(
-        window.firebase.collection(window.firebase.db, "rooms"),
-        window.firebase.where("status", "==", "waiting"),
-        window.firebase.where("jeu", "==", gameType)
-    );
-
-    unsubscribeLobby = window.firebase.onSnapshot(q, (snapshot) => {
-        const listeDiv = document.getElementById("liste-salons");
-        listeDiv.innerHTML = "";
-        let salonsTrouves = 0;
-
-        snapshot.forEach((doc) => {
-            const data = doc.data();
-            if (data.estPrive === false) {
-                salonsTrouves++;
-                const btn = document.createElement("button");
-                btn.className = "btn-action btn-vert";
-                btn.style.width = "100%";
-                btn.style.padding = "10px";
-                btn.style.fontSize = "14px";
-                btn.style.marginBottom = "5px";
-                btn.textContent = `Rejoindre le salon ${doc.id}`;
-                btn.onclick = () => {
-                    document.getElementById("input-salon").value = doc.id;
-                    rejoindreSalon();
-                };
-                listeDiv.appendChild(btn);
-            }
-        });
-
-        if (salonsTrouves === 0) {
-            listeDiv.innerHTML = "<p class='chargement'>Aucun salon public disponible.</p>";
-        }
-    });
+body {
+    background: radial-gradient(circle, var(--bois-clair) 0%, var(--bois-sombre) 100%);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    overflow: hidden;
 }
 
-async function creerSalon(estPrive = false) {
-    if (!currentUser) return alert("Connexion en cours, réessaie dans une seconde.");
-    
-    const roomId = Math.random().toString(36).substring(2, 8).toUpperCase();
-    
-    try {
-        await window.firebase.setDoc(window.firebase.doc(window.firebase.db, "rooms", roomId), {
-            host: currentUser.uid,
-            guest: "",
-            status: "waiting",
-            jeu: gameType,
-            estPrive: estPrive,
-            createdAt: window.firebase.serverTimestamp(),
-            gameState: {} 
-        });
-        
-        currentRoomId = roomId;
-        isHost = true;
-        
-        if (estPrive) {
-            alert(`Salon PRIVÉ créé !\n\nCode à donner à ton ami : ${roomId}\n\nCe salon n'apparaît pas dans la liste publique.`);
-        } else {
-            alert(`Salon PUBLIC créé !\nCode : ${roomId}\nIl est visible par tout le monde dans la liste des salons.`);
-        }
-        
-        ecouterSalon(roomId);
-        
-        document.getElementById("ecran-accueil").style.display = "none";
-        document.getElementById("table-de-jeu").style.display = "flex";
-        document.getElementById("info-joueur").textContent = "En attente d'un adversaire...";
-        
-    } catch (e) {
-        console.error("Erreur de création :", e);
-        alert("Erreur lors de la création du salon.");
-    }
+/* ========================================== */
+/* --- 1. MENU PRINCIPAL (DESIGN LUXE) ---    */
+/* ========================================== */
+#menu-principal {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background: radial-gradient(circle at 50% 0%, #1a4a2e 0%, #0d1f14 60%, #000000 100%);
+    display: flex; flex-direction: column; justify-content: center; align-items: center;
+    z-index: 3000; color: white; padding: 20px; overflow-y: auto;
 }
 
-async function rejoindreSalon() {
-    if (!currentUser) return alert("Connexion en cours, réessaie dans une seconde.");
-    const roomCode = document.getElementById("input-salon").value.trim().toUpperCase();
-    if (roomCode.length !== 6) return alert("Le code doit faire 6 caractères.");
-
-    const roomRef = window.firebase.doc(window.firebase.db, "rooms", roomCode);
-
-    try {
-        const docSnap = await window.firebase.getDoc(roomRef);
-        
-        if (!docSnap.exists()) return alert("Ce salon n'existe pas.");
-        
-        const data = docSnap.data();
-        if (data.status !== "waiting" || data.guest !== "") {
-            return alert("Ce salon est déjà complet ou la partie a commencé.");
-        }
-        
-        await window.firebase.updateDoc(roomRef, {
-            guest: currentUser.uid,
-            status: "playing"
-        });
-        
-        currentRoomId = roomCode;
-        isHost = false;
-        alert("Salon rejoint avec succès !");
-        
-        document.getElementById("ecran-accueil").style.display = "none";
-        document.getElementById("table-de-jeu").style.display = "flex";
-        
-        ecouterSalon(roomCode);
-        
-    } catch (e) {
-        console.error("Erreur de jointure :", e);
-        alert("Erreur lors de la connexion au salon.");
-    }
+#menu-principal h1 {
+    font-family: 'Cinzel', serif;
+    font-size: clamp(40px, 7vw, 80px);
+    background: linear-gradient(to bottom, var(--or-clair) 0%, var(--or) 40%, var(--or-fonce) 100%);
+    -webkit-background-clip: text;
+    background-clip: text; /* Correction warning VS Code */
+    -webkit-text-fill-color: transparent;
+    filter: drop-shadow(0px 4px 10px rgba(0,0,0,0.8)) drop-shadow(0px 0px 20px rgba(241, 196, 15, 0.4));
+    margin-bottom: 5px;
+    text-align: center;
+    letter-spacing: 2px;
 }
 
-function ecouterSalon(roomId) {
-    if (unsubscribeRoom) unsubscribeRoom();
-    if (unsubscribeLobby) unsubscribeLobby();
-    
-    unsubscribeRoom = window.firebase.onSnapshot(window.firebase.doc(window.firebase.db, "rooms", roomId), (doc) => {
-        if (doc.exists()) {
-            const data = doc.data();
-            
-            if (isHost && data.guest !== "" && data.status === "playing") {
-                document.getElementById("info-joueur").textContent = "Adversaire connecté ! Préparation de la partie...";
-            }
-        }
-    });
+.sous-titre-menu {
+    font-size: clamp(12px, 1.5vw, 18px); 
+    color: #8cbc9e; 
+    margin-bottom: 60px; 
+    text-align: center;
+    letter-spacing: 4px; 
+    text-transform: uppercase;
+    font-weight: 700;
 }
 
-// ==========================================
-// GESTION DU SON
-// ==========================================
-const sonPiocher = new Audio('audio/pioche.ogg');
-const sonPoser = new Audio('audio/pose.ogg');
-const sonVictoire = new Audio('audio/victoire.ogg');
-const sonDefaite = new Audio('audio/defaite.ogg');
-let estMuet = false;
-function jouerSon(sound) {
-    if (estMuet) return;
-    sound.currentTime = 0;
-    sound.volume = 0.3;
-    sound.play().catch(e => console.log("Son bloqué"));
+.grille-jeux {
+    display: flex; flex-wrap: wrap; gap: 40px; justify-content: center; max-width: 1100px;
 }
 
-// ==========================================
-// VARIABLES GLOBALES
-// ==========================================
-let deck = [];
-let combinaisonsTable = []; 
-let carteDefausseActuelle = null; 
-
-let joueurs = []; 
-let joueurActuel = 0; 
-let premierTourGlobal = true; 
-let mancheTerminee = false;
-
-let nbJoueursTotal = 1;
-let modeJeu = 'ia';
-let niveauDifficulte = 'moyen';
-
-const couleurs = ['coeur', 'carreau', 'trefle', 'pique'];
-const valeurs = ['as', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'valet', 'dame', 'roi'];
-const tradValeurs = { 'as': 'ace', 'valet': 'jack', 'dame': 'queen', 'roi': 'king' };
-const tradCouleurs = { 'coeur': 'hearts', 'carreau': 'diamonds', 'trefle': 'clubs', 'pique': 'spades' };
-
-const conteneurMain = document.getElementById("main-joueur");
-const defausseHTML = document.getElementById("defausse");
-const combinaisonsHTML = document.getElementById("combinaisons");
-const btnPiocher = document.getElementById("btn-piocher");
-const btnPoser = document.getElementById("btn-poser");
-const btnVoler = document.getElementById("btn-voler");
-const btnDefausser = document.getElementById("btn-defausser");
-
-// ==========================================
-// CONFIGURATION DE LA PARTIE
-// ==========================================
-function setNbJoueurs(nb) {
-    nbJoueursTotal = nb;
-    for(let i=1; i<=4; i++) document.getElementById(`btn-j${i}`).classList.remove('actif');
-    document.getElementById(`btn-j${nb}`).classList.add('actif');
-    
-    if (nb === 1) {
-        setMode('ia');
-        document.getElementById("section-mode").style.display = "none";
-    } else {
-        document.getElementById("section-mode").style.display = "block";
-    }
+.carte-jeu {
+    background: linear-gradient(145deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.02) 100%);
+    border: 1px solid rgba(241, 196, 15, 0.2);
+    border-radius: 25px;
+    padding: 40px 30px;
+    width: 300px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    position: relative;
+    box-shadow: 0 15px 35px rgba(0, 0, 0, 0.5), inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(15px);
+    overflow: hidden;
 }
 
-function setMode(mode) {
-    modeJeu = mode;
-    document.getElementById('btn-mode-ia').classList.remove('actif');
-    document.getElementById('btn-mode-local').classList.remove('actif');
-    document.getElementById(`btn-mode-${mode}`).classList.add('actif');
-
-    if (modeJeu === 'ia') {
-        document.getElementById("section-difficulte").style.display = "block";
-    } else {
-        document.getElementById("section-difficulte").style.display = "none";
-    }
+.effet-brillance {
+    position: absolute;
+    top: -50%; left: -50%; width: 200%; height: 200%;
+    background: linear-gradient(to right, rgba(255,255,255,0) 0%, rgba(255,255,255,0.1) 50%, rgba(255,255,255,0) 100%);
+    transform: rotate(45deg) translateY(-100%);
+    transition: transform 0.6s ease-in-out;
 }
 
-function setDifficulte(niveau) {
-    niveauDifficulte = niveau;
-    ['facile', 'moyen', 'difficile'].forEach(n => document.getElementById(`btn-${n}`).classList.remove('actif'));
-    document.getElementById(`btn-${niveau}`).classList.add('actif');
+.carte-jeu:hover .effet-brillance {
+    transform: rotate(45deg) translateY(100%);
 }
 
-function lancerPartie() {
-    document.getElementById("ecran-accueil").style.display = "none";
-    document.getElementById("table-de-jeu").style.display = "flex";
-    
-    joueurs = [];
-    for (let i = 0; i < nbJoueursTotal; i++) {
-        let isIA = (modeJeu === 'ia' && i > 0);
-        joueurs.push({
-            id: i,
-            nom: isIA ? `IA ${i}` : `Joueur ${i + 1}`,
-            main: [],
-            score: 0,
-            aPose: false,
-            aPioche: false,
-            isIA: isIA
-        });
-    }
-
-    // Nettoyage des zones
-    document.getElementById("adv-haut").innerHTML = "";
-    document.getElementById("adv-gauche").innerHTML = "";
-    document.getElementById("adv-droite").innerHTML = "";
-
-    let iaCount = 1;
-    joueurs.forEach(j => {
-        if (j.isIA) {
-            const htmlProfil = `<div class="profil-adversaire">
-                <div class="avatar">🤖</div>
-                <div class="infos-adversaire">
-                    <h3>${j.nom}</h3>
-                    <p id="info-ordi-${j.id}">13 cartes</p>
-                </div>
-            </div>`;
-
-            // Distribution spatiale
-            if (iaCount === 1) document.getElementById("adv-haut").innerHTML = htmlProfil; // 1ère IA en haut
-            else if (iaCount === 2) document.getElementById("adv-gauche").innerHTML = htmlProfil; // 2ème à gauche
-            else if (iaCount === 3) document.getElementById("adv-droite").innerHTML = htmlProfil; // 3ème à droite
-            
-            iaCount++;
-        }
-    });
-
-    demarrerManche();
-}
-// ==========================================
-// LOGIQUE DU JEU
-// ==========================================
-function demarrerManche() {
-    mancheTerminee = false;
-    premierTourGlobal = true;
-    combinaisonsTable = [];
-    combinaisonsHTML.innerHTML = "";
-    joueurActuel = 0;
-    
-    joueurs.forEach(j => { j.main = []; j.aPose = false; j.aPioche = false; });
-    
-    document.getElementById("ecran-victoire").style.display = "none";
-    
-    creerDeck();
-    distribuerCartes();
-    afficherScores();
-    preparerTour();
+.carte-jeu:hover {
+    transform: translateY(-15px) scale(1.05);
+    background: linear-gradient(145deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.03) 100%);
+    box-shadow: 0 25px 50px rgba(0, 0, 0, 0.6), 0 0 30px rgba(241, 196, 15, 0.3), inset 0 0 0 2px rgba(241, 196, 15, 0.5);
+    border-color: rgba(241, 196, 15, 0.8);
 }
 
-function creerDeck() {
-    deck = [];
-    
-    // Les 4 images de jokers différentes de ton dossier
-    const imagesJokers = [
-        'cartes/jokers/red joker.png',
-        'cartes/jokers/black joker.png',
-        'cartes/jokers/red joker 1.png',
-        'cartes/jokers/black joker 1.png'
-    ];
-    let indexJoker = 0;
-
-    for (let i = 0; i < 2; i++) {
-        for (let couleur of couleurs) {
-            for (let valeur of valeurs) {
-                deck.push({ valeur: valeur, couleur: couleur });
-            }
-        }
-        // On ajoute 2 jokers par jeu avec leur image spécifique
-        deck.push({ valeur: 'joker', couleur: 'joker', image: imagesJokers[indexJoker++] });
-        deck.push({ valeur: 'joker', couleur: 'joker', image: imagesJokers[indexJoker++] });
-    }
-    for (let i = deck.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [deck[i], deck[j]] = [deck[j], deck[i]];
-    }
+.icone-jeu {
+    font-size: 70px; margin-bottom: 20px;
+    filter: drop-shadow(0px 10px 15px rgba(0,0,0,0.5));
+    transition: transform 0.3s;
 }
 
-function distribuerCartes() {
-    for (let i = 0; i < 13; i++) {
-        joueurs.forEach(j => j.main.push(deck.pop()));
-    }
-    
-    joueurs.forEach(j => {
-        j.main.sort((a, b) => {
-            if (a.valeur === 'joker') return 1;
-            if (b.valeur === 'joker') return -1;
-            if (a.couleur === b.couleur) return valeurs.indexOf(a.valeur) - valeurs.indexOf(b.valeur);
-            return couleurs.indexOf(a.couleur) - couleurs.indexOf(b.couleur);
-        });
-    });
-
-    carteDefausseActuelle = deck.pop();
-    afficherCarteDefausse();
+.carte-jeu:hover .icone-jeu {
+    transform: scale(1.2) translateY(-5px);
 }
 
-function afficherScores() {
-    const conteneur = document.getElementById("scores-container");
-    conteneur.innerHTML = "";
-    joueurs.forEach(j => {
-        conteneur.innerHTML += `
-            <div class="score-box" style="${j.id === joueurActuel ? 'border: 2px solid var(--or); box-shadow: 0 0 10px var(--or);' : ''}">
-                <span>${j.nom}</span>
-                <strong>${j.score}</strong> pts
-            </div>
-        `;
-    });
+.carte-jeu h2 {
+    font-family: 'Cinzel', serif;
+    color: var(--or); 
+    font-size: 28px; 
+    margin-bottom: 15px;
+    text-shadow: 0 2px 4px rgba(0,0,0,0.5);
 }
 
-function preparerTour() {
-    afficherScores();
-    const j = joueurs[joueurActuel];
-    
-    joueurs.forEach(joueur => {
-        if (joueur.isIA) {
-            const el = document.getElementById(`info-ordi-${joueur.id}`);
-            if (el) el.textContent = `${joueur.main.length} cartes`;
-        }
-    });
-
-    if (j.isIA) {
-        document.getElementById("zone-joueur").style.visibility = "hidden";
-        setTimeout(tourIA, 1500);
-    } else {
-        if (modeJeu === 'local' && nbJoueursTotal > 1) {
-            document.getElementById("titre-passe").textContent = `Au tour du ${j.nom}`;
-            document.getElementById("ecran-passe").style.display = "flex";
-            document.getElementById("table-de-jeu").style.visibility = "hidden";
-        } else {
-            debutTourJoueur();
-        }
-    }
+.carte-jeu p {
+    color: #b0c4b1; 
+    font-size: 15px; 
+    line-height: 1.5;
+    font-weight: 500;
 }
 
-function debutTourJoueur() {
-    document.getElementById("ecran-passe").style.display = "none";
-    document.getElementById("table-de-jeu").style.visibility = "visible";
-    document.getElementById("zone-joueur").style.visibility = "visible";
-    
-    const j = joueurs[joueurActuel];
-    document.getElementById("info-joueur").textContent = `Main de ${j.nom} (${j.main.length} cartes)`;
-    
-    afficherMainJoueur(j.main);
-    mettreAJourUI();
+/* Couleur vive pour la Belote et la Coinche */
+.icone-rouge {
+    color: #ff3333;
+    text-shadow: 0 0 10px rgba(255, 51, 51, 0.8), 0 0 20px rgba(255, 51, 51, 0.6), 0 0 40px rgba(255, 51, 51, 0.4);
+    -webkit-text-stroke: 1px #cc0000; 
 }
 
-function creerImageCarte(carte, estSurTable = false) {
-    const img = document.createElement("img");
-    img.classList.add(estSurTable ? "carte-table" : "carte");
-    
-    if (carte.valeur === 'joker') {
-        // On utilise l'image du joker attribuée à la création du deck
-        img.src = carte.image || 'cartes/jokers/red joker.png'; 
-        img.classList.add("joker");
-        img.alt = "Joker";
-    } else {
-        let valAnglaise = tradValeurs[carte.valeur] || carte.valeur; 
-        let coulAnglaise = tradCouleurs[carte.couleur];
-        img.src = `cartes/${coulAnglaise}/${encodeURIComponent(valAnglaise + " of " + coulAnglaise + ".png")}`; 
-        img.alt = `${carte.valeur} de ${carte.couleur}`;
-    }
-    return img;
+.carte-jeu.bientot {
+    opacity: 0.85; cursor: not-allowed; filter: none;
+    background: linear-gradient(145deg, rgba(20, 20, 20, 0.8) 0%, rgba(0, 0, 0, 0.9) 100%);
+    border: 1px solid rgba(255, 51, 51, 0.3);
+}
+.carte-jeu.bientot:hover {
+    transform: translateY(-5px) scale(1);
+    box-shadow: 0 15px 35px rgba(255, 51, 51, 0.2);
+    border-color: rgba(255, 51, 51, 0.6);
+    background: linear-gradient(145deg, rgba(30, 30, 30, 0.9) 0%, rgba(0, 0, 0, 1) 100%);
+}
+.carte-jeu.bientot:hover .effet-brillance { transform: rotate(45deg) translateY(-100%); }
+.carte-jeu.bientot:hover .icone-jeu { transform: scale(1); }
+
+.badge-bientot {
+    position: absolute; top: 20px; right: -30px;
+    background: linear-gradient(135deg, #e74c3c, #c0392b); 
+    color: white; padding: 5px 40px;
+    font-size: 12px; font-weight: 900; text-transform: uppercase;
+    transform: rotate(45deg);
+    box-shadow: 0 2px 10px rgba(0,0,0,0.5);
+    letter-spacing: 1px;
 }
 
-let draggedCardIndex = null;
-
-function afficherMainJoueur(main) {
-    conteneurMain.innerHTML = "";
-    
-    main.forEach((carte, index) => {
-        const img = creerImageCarte(carte);
-        img.setAttribute("draggable", "true");
-        img.dataset.index = index;
-
-        img.addEventListener("click", () => {
-            if (!mancheTerminee && !joueurs[joueurActuel].isIA) {
-                img.classList.toggle("selectionnee");
-                jouerSon(sonPiocher);
-            }
-        });
-
-        img.addEventListener("dragstart", function(e) {
-            if (mancheTerminee || joueurs[joueurActuel].isIA) return;
-            draggedCardIndex = index;
-            setTimeout(() => this.style.opacity = '0.4', 0); 
-        });
-
-        img.addEventListener("dragend", function() { this.style.opacity = '1'; });
-        img.addEventListener("dragover", function(e) { e.preventDefault(); });
-
-        img.addEventListener("drop", function(e) {
-            e.preventDefault();
-            if (draggedCardIndex === null || draggedCardIndex === index) return;
-            const mainActuelle = joueurs[joueurActuel].main;
-            const carteDeplacee = mainActuelle.splice(draggedCardIndex, 1)[0];
-            mainActuelle.splice(index, 0, carteDeplacee);
-            draggedCardIndex = null;
-            afficherMainJoueur(mainActuelle); 
-        });
-
-        conteneurMain.appendChild(img);
-    });
+/* ========================================== */
+/* --- 2. MENU D'ACCUEIL DU RAMI ---          */
+/* ========================================== */
+#ecran-accueil {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background: radial-gradient(circle, var(--bois-clair) 0%, var(--bois-sombre) 100%);
+    display: none; flex-direction: column; justify-content: flex-start; align-items: center;
+    z-index: 2000; color: white; overflow-y: auto; padding: 80px 20px 40px;
 }
 
-function afficherTable() {
-    combinaisonsHTML.innerHTML = "";
-    combinaisonsTable.forEach((combinaison) => {
-        const divGroupe = document.createElement("div");
-        divGroupe.classList.add("combinaison-groupe");
-        
-        combinaison.forEach(carte => {
-            const img = creerImageCarte(carte, true);
-            img.addEventListener("click", () => {
-                if (!mancheTerminee && !joueurs[joueurActuel].isIA) {
-                    img.classList.toggle("selectionnee");
-                    jouerSon(sonPiocher);
-                }
-            });
-            divGroupe.appendChild(img);
-        });
-        combinaisonsHTML.appendChild(divGroupe);
-    });
+#ecran-accueil h1 {
+    font-family: 'Cinzel', serif;
+    font-size: clamp(30px, 5vw, 50px);
+    color: var(--or);
+    margin-bottom: 30px;
+    text-shadow: 0 0 20px rgba(241, 196, 15, 0.5);
+    text-align: center;
 }
 
-function afficherCarteDefausse() {
-    defausseHTML.innerHTML = "";
-    if (carteDefausseActuelle) defausseHTML.appendChild(creerImageCarte(carteDefausseActuelle));
+.menu-container {
+    display: flex; flex-wrap: wrap; justify-content: center; gap: 30px;
+    width: 100%; max-width: 1000px;
 }
 
-function mettreAJourUI() {
-    document.getElementById("compteur-pioche").textContent = deck.length;
-    
-    if (!mancheTerminee && joueurs[joueurActuel] && !joueurs[joueurActuel].isIA) {
-        const j = joueurs[joueurActuel];
-        btnPiocher.disabled = j.aPioche;
-        btnDefausser.disabled = !j.aPioche;
-        btnPoser.disabled = !j.aPioche; 
-        btnVoler.disabled = !j.aPioche || !j.aPose; 
-    } else {
-        btnPiocher.disabled = true;
-        btnDefausser.disabled = true;
-        btnPoser.disabled = true;
-        btnVoler.disabled = true;
-    }
+.menu-card {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 20px;
+    padding: 25px;
+    flex: 1 1 400px;
+    max-width: 500px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    backdrop-filter: blur(10px);
+    display: flex; flex-direction: column;
 }
 
-// ==========================================
-// RÈGLES ET COMBINAISONS (AVEC JOKERS)
-// ==========================================
-function calculerPointsCarte(carte) {
-    if (carte.valeur === 'joker') return 0;
-    if (carte.valeur === 'as') return 11;
-    if (['valet', 'dame', 'roi'].includes(carte.valeur)) return 10;
-    return parseInt(carte.valeur);
+.menu-titre {
+    color: var(--or); font-size: 22px; margin-bottom: 20px;
+    text-align: center; border-bottom: 2px solid rgba(241, 196, 15, 0.3);
+    padding-bottom: 10px; font-family: 'Cinzel', serif;
 }
 
-function calculerPointsMain(main) {
-    return main.reduce((sum, c) => sum + calculerPointsCarte(c), 0);
+.menu-sous-titre {
+    font-size: 15px; color: #ddd; margin-bottom: 10px;
+    font-weight: 700; text-transform: uppercase; letter-spacing: 1px;
 }
 
-function estUnBrelan(cartes) {
-    if (cartes.length < 3 || cartes.length > 4) return false;
-    let jokers = cartes.filter(c => c.valeur === 'joker');
-    let reelles = cartes.filter(c => c.valeur !== 'joker');
-    
-    if (jokers.length > cartes.length - 2) return false;
-    if (reelles.length === 0) return false;
+.boutons-ligne { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+.boutons-grille { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; }
 
-    let val = reelles[0].valeur;
-    if (!reelles.every(c => c.valeur === val)) return false;
-    
-    let couleursSet = new Set(reelles.map(c => c.couleur));
-    if (couleursSet.size !== reelles.length) return false;
-    
-    return true;
+.separateur { height: 1px; background: rgba(255, 255, 255, 0.1); margin: 20px 0; }
+
+.input-group { display: flex; gap: 10px; }
+.input-group input {
+    flex: 1; padding: 12px; border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    background: rgba(0, 0, 0, 0.3); color: white;
+    font-size: 16px; text-transform: uppercase;
+    font-weight: bold; text-align: center; letter-spacing: 2px;
+    outline: none; transition: border 0.3s;
+}
+.input-group input:focus { border-color: var(--or); }
+
+.liste-salons {
+    background: rgba(0, 0, 0, 0.2); border-radius: 10px; padding: 10px;
+    min-height: 80px; max-height: 150px; overflow-y: auto;
+    display: flex; flex-direction: column; gap: 8px;
 }
 
-function estUneTierce(cartes) {
-    if (cartes.length < 3) return false;
-    let jokers = cartes.filter(c => c.valeur === 'joker');
-    let reelles = cartes.filter(c => c.valeur !== 'joker').sort((a, b) => valeurs.indexOf(a.valeur) - valeurs.indexOf(b.valeur));
-    
-    if (jokers.length > cartes.length - 2) return false;
-    if (reelles.length === 0) return false;
-    if (!reelles.every(c => c.couleur === reelles[0].couleur)) return false;
-
-    if (reelles.length === 3 && reelles[0].valeur === 'dame' && reelles[1].valeur === 'roi' && reelles[2].valeur === 'as' && jokers.length === 0) return true;
-    if (reelles.slice(0, -1).some(c => c.valeur === 'as')) return false; 
-
-    let trous = 0;
-    for (let i = 0; i < reelles.length - 1; i++) {
-        let diff = valeurs.indexOf(reelles[i+1].valeur) - valeurs.indexOf(reelles[i].valeur);
-        if (diff === 0) return false;
-        trous += diff - 1;
-    }
-    return trous <= jokers.length;
+.chargement {
+    color: #aaa; font-style: italic; text-align: center;
+    font-size: 14px; margin-top: 15px;
 }
 
-function estCombinaisonValide(cartes) {
-    return estUnBrelan(cartes) || estUneTierce(cartes);
+.btn-jouer-principal {
+    margin-top: auto; font-size: 20px !important;
+    padding: 15px 30px !important; width: 100%; margin-top: 30px;
 }
 
-function decouperEnCombinaisons(cartes) {
-    let pool = [...cartes];
-    let groupes = [];
-    
-    let jokers = pool.filter(c => c.valeur === 'joker');
-    pool = pool.filter(c => c.valeur !== 'joker');
-
-    pool.sort((a, b) => {
-        if (a.couleur === b.couleur) return valeurs.indexOf(a.valeur) - valeurs.indexOf(b.valeur);
-        return couleurs.indexOf(a.couleur) - couleurs.indexOf(b.couleur);
-    });
-
-    let aTrouve = true;
-    while (aTrouve) {
-        aTrouve = false;
-        for (let coul of couleurs) {
-            let cartesCoul = pool.filter(c => c.couleur === coul);
-            if (cartesCoul.length >= 3) {
-                for (let i = 0; i <= cartesCoul.length - 3; i++) {
-                    let suite = [cartesCoul[i]];
-                    for (let j = i + 1; j < cartesCoul.length; j++) {
-                        if (valeurs.indexOf(cartesCoul[j].valeur) === valeurs.indexOf(suite[suite.length - 1].valeur) + 1) {
-                            suite.push(cartesCoul[j]);
-                        } else break;
-                    }
-                    if (suite.length >= 3) {
-                        groupes.push(suite);
-                        suite.forEach(c => pool.splice(pool.indexOf(c), 1));
-                        aTrouve = true;
-                        break;
-                    }
-                }
-            }
-            if (aTrouve) break;
-        }
-        if (aTrouve) continue;
-
-        for (let val of valeurs) {
-            let memeValeur = pool.filter(c => c.valeur === val);
-            let uniques = [];
-            let couleursVues = new Set();
-            for (let c of memeValeur) {
-                if (!couleursVues.has(c.couleur)) { uniques.push(c); couleursVues.add(c.couleur); }
-            }
-            if (uniques.length >= 3) {
-                groupes.push(uniques.slice(0, 3));
-                uniques.slice(0, 3).forEach(c => pool.splice(pool.indexOf(c), 1));
-                aTrouve = true;
-                break;
-            }
-        }
-    }
-
-    for (let joker of jokers) {
-        let placed = false;
-        for (let grp of groupes) {
-            if (grp.length === 3 && estCombinaisonValide([...grp, joker])) {
-                grp.push(joker);
-                placed = true;
-                break;
-            }
-        }
-        if (!placed) {
-            for (let c of pool) {
-                if (estCombinaisonValide([c, joker, pool[0]]) && pool[0] !== c) {
-                    groupes.push([c, joker, pool[0]]);
-                    pool.splice(pool.indexOf(c), 1);
-                    pool.splice(pool.indexOf(pool[0]), 1);
-                    placed = true;
-                    break;
-                }
-            }
-        }
-    }
-
-    if (pool.length > 0) return null; 
-    return groupes;
+.btn-retour {
+    position: absolute; top: 30px; left: 30px;
+    background: rgba(0,0,0,0.6); color: #f1c40f; border: 1px solid rgba(241, 196, 15, 0.4);
+    padding: 10px 20px; border-radius: 30px; cursor: pointer; font-weight: 700;
+    transition: all 0.3s; z-index: 9999; backdrop-filter: blur(5px);
+    font-family: 'Montserrat', sans-serif;
+}
+.btn-retour:hover { 
+    background: rgba(241, 196, 15, 0.2); 
+    transform: translateX(-5px); 
+    box-shadow: 0 0 15px rgba(241, 196, 15, 0.4);
 }
 
-// ==========================================
-// ACTIONS DU JOUEUR
-// ==========================================
-btnPiocher.addEventListener("click", () => {
-    const j = joueurs[joueurActuel];
-    if (j.aPioche || mancheTerminee || j.isIA) return;
-    
-    let nouvelleCarte = piocherDansLeDeck();
-    if (!nouvelleCarte) return; 
-    j.main.push(nouvelleCarte);
-    j.aPioche = true;
-    afficherMainJoueur(j.main);
-    mettreAJourUI();
-    jouerSon(sonPiocher);
-});
-
-defausseHTML.addEventListener("click", () => {
-    const j = joueurs[joueurActuel];
-    if (j.aPioche || mancheTerminee || !carteDefausseActuelle || j.isIA) return;
-    
-    if (!j.aPose) {
-        let mainTest = [...j.main, carteDefausseActuelle];
-        if (calculerPointsMain(mainTest) < 51) {
-            return alert("Vous ne pouvez prendre la défausse que si elle vous permet de faire vos 51 points !");
-        }
-    }
-    j.main.push(carteDefausseActuelle);
-    carteDefausseActuelle = null; 
-    j.aPioche = true; 
-    afficherCarteDefausse();
-    afficherMainJoueur(j.main);
-    mettreAJourUI();
-    jouerSon(sonPiocher);
-});
-
-btnPoser.addEventListener("click", () => {
-    const j = joueurs[joueurActuel];
-    if (premierTourGlobal || mancheTerminee || j.isIA) return;
-    
-    const cartesSelectionneesHTML = document.querySelectorAll('#main-joueur .carte.selectionnee');
-    const carteTableHTML = document.querySelector('.carte-table.selectionnee');
-
-    if (cartesSelectionneesHTML.length === 0 && !carteTableHTML) return alert("Sélectionnez des cartes.");
-
-    let cartesHand = [];
-    cartesSelectionneesHTML.forEach(imgHTML => {
-        const carteObj = j.main.find(c => (c.valeur==='joker' && imgHTML.alt==='Joker') || `${c.valeur} de ${c.couleur}` === imgHTML.alt);
-        if (carteObj) cartesHand.push(carteObj);
-    });
-
-    if (carteTableHTML) {
-        if (!j.aPose) return alert("Vous devez d'abord faire votre ouverture de 51 points pour compléter la table !");
-        if (cartesHand.length === 0) return alert("Sélectionnez les cartes de votre main que vous voulez ajouter.");
-
-        const altTable = carteTableHTML.alt;
-        let combIndex = -1;
-        combinaisonsTable.forEach((comb, i) => {
-            if (comb.some(c => (c.valeur==='joker' && altTable==='Joker') || `${c.valeur} de ${c.couleur}` === altTable)) combIndex = i;
-        });
-
-        if (combIndex !== -1) {
-            let nouvelleComb = [...combinaisonsTable[combIndex], ...cartesHand];
-            if (estCombinaisonValide(nouvelleComb)) {
-                combinaisonsTable[combIndex] = nouvelleComb;
-                cartesHand.forEach(c => j.main.splice(j.main.indexOf(c), 1));
-                afficherMainJoueur(j.main);
-                afficherTable();
-                mettreAJourUI();
-                jouerSon(sonPoser);
-                return; 
-            } else {
-                return alert("Impossible de compléter : ces cartes ne s'ajoutent pas à cette combinaison.");
-            }
-        }
-    }
-
-    if (cartesHand.length === 0) return;
-    let groupes = decouperEnCombinaisons(cartesHand);
-    if (!groupes) return alert("Combinaison invalide.");
-
-    let pointsTotal = groupes.reduce((sum, grp) => sum + grp.reduce((s, c) => s + calculerPointsCarte(c), 0), 0);
-
-    if (!j.aPose) {
-        if (pointsTotal < 51) return alert(`Total : ${pointsTotal} pts. Il en faut 51.`);
-        let aUnBrelan = groupes.some(grp => estUnBrelan(grp));
-        let aUneTierce = groupes.some(grp => estUneTierce(grp));
-        if (!aUnBrelan || !aUneTierce) return alert("Règle : pour ouvrir, il faut obligatoirement au moins UNE tierce ET UN brelan !");
-    }
-
-    j.aPose = true;
-    cartesHand.forEach(carte => j.main.splice(j.main.indexOf(carte), 1));
-    groupes.forEach(grp => combinaisonsTable.push(grp));
-    
-    afficherMainJoueur(j.main);
-    afficherTable();
-    mettreAJourUI();
-    jouerSon(sonPoser);
-});
-
-btnVoler.addEventListener("click", () => {
-    const j = joueurs[joueurActuel];
-    if (mancheTerminee || j.isIA) return;
-    
-    const cartesTableHTML = document.querySelectorAll('.carte-table.selectionnee');
-    const cartesMainHTML = document.querySelectorAll('#main-joueur .carte.selectionnee');
-    
-    if (cartesTableHTML.length === 0 || cartesMainHTML.length === 0) {
-        return alert("Sélectionnez une ou plusieurs cartes sur la table ET de votre main.");
-    }
-
-    // --- CORRECTION ICI : On vérifie TOUTES les cartes sélectionnées ---
-    for (let imgHTML of cartesTableHTML) {
-        if (imgHTML.alt === 'Joker') {
-            return alert("Impossible de voler un joker !");
-        }
-    }
-
-    let combIndex = -1;
-    let cartesVolees = [];
-    let multiComb = false;
-
-    cartesTableHTML.forEach(imgHTML => {
-        const alt = imgHTML.alt;
-        combinaisonsTable.forEach((comb, i) => {
-            const c = comb.find(c => `${c.valeur} de ${c.couleur}` === alt);
-            if (c) {
-                if (combIndex !== -1 && combIndex !== i) multiComb = true;
-                combIndex = i;
-                cartesVolees.push(c);
-            }
-        });
-    });
-
-    if (multiComb) return alert("Vous ne pouvez voler que dans une seule combinaison à la fois.");
-    
-    const reste = combinaisonsTable[combIndex].length - cartesVolees.length;
-    if (reste < 3) {
-        return alert(`Il doit rester au moins 3 cartes sur la table (max vol : ${combinaisonsTable[combIndex].length - 3}).`);
-    }
-
-    let cartesMain = [];
-    cartesMainHTML.forEach(imgHTML => {
-        const c = j.main.find(c => (c.valeur==='joker' && imgHTML.alt==='Joker') || `${c.valeur} de ${c.couleur}` === imgHTML.alt);
-        if (c) cartesMain.push(c);
-    });
-
-    let nouvelleCombinaison = [...cartesMain, ...cartesVolees];
-    if (!decouperEnCombinaisons(nouvelleCombinaison)) return alert("La nouvelle combinaison formée est invalide.");
-
-    cartesVolees.forEach(c => {
-        const idx = combinaisonsTable[combIndex].indexOf(c);
-        if (idx !== -1) combinaisonsTable[combIndex].splice(idx, 1);
-    });
-    cartesMain.forEach(c => j.main.splice(j.main.indexOf(c), 1));
-    combinaisonsTable.push(nouvelleCombinaison);
-
-    afficherMainJoueur(j.main);
-    afficherTable();
-    mettreAJourUI();
-    jouerSon(sonPoser);
-});
-
-btnDefausser.addEventListener("click", () => {
-    const j = joueurs[joueurActuel];
-    if (!j.aPioche || mancheTerminee || j.isIA) return;
-    
-    const carteSelectionneeHTML = document.querySelector('#main-joueur .carte.selectionnee');
-    if (!carteSelectionneeHTML) return alert("Sélectionnez une carte à jeter.");
-    
-    const altCarte = carteSelectionneeHTML.alt;
-    const indexCarte = j.main.findIndex(c => (c.valeur==='joker' && altCarte==='Joker') || `${c.valeur} de ${c.couleur}` === altCarte);
-    
-    if (indexCarte !== -1) {
-        carteDefausseActuelle = j.main.splice(indexCarte, 1)[0];
-        afficherCarteDefausse();
-        afficherMainJoueur(j.main);
-        jouerSon(sonPiocher);
-        
-        if (j.main.length === 0) return finDeManche(joueurActuel);
-        passerAuJoueurSuivant();
-    }
-});
-
-function piocherDansLeDeck() {
-    if (deck.length === 0) {
-        if (carteDefausseActuelle) {
-            let ancienneDefausse = carteDefausseActuelle;
-            combinaisonsTable.forEach(comb => deck.push(...comb));
-            combinaisonsTable = [];
-            for (let i = deck.length - 1; i > 0; i--) {
-                const j = Math.floor(Math.random() * (i + 1));
-                [deck[i], deck[j]] = [deck[j], deck[i]];
-            }
-            carteDefausseActuelle = ancienneDefausse;
-            afficherTable();
-            alert("La pioche est vide ! Mélange de la défausse.");
-            if (deck.length === 0) { finDeManche(-1); return null; }
-        }
-    }
-    return deck.pop();
+/* ========================================== */
+/* --- 3. LA TABLE DE JEU ---                 */
+/* ========================================== */
+#table-de-jeu {
+    background: radial-gradient(circle, var(--feutrine) 0%, var(--feutrine-fonce) 100%);
+    width: 98vw; height: 98vh; border-radius: 20px;
+    border: 10px solid #5d4037;
+    box-shadow: inset 0 0 50px rgba(0,0,0,0.6), 0 10px 30px rgba(0,0,0,0.9);
+    display: flex; flex-direction: column; justify-content: space-between;
+    padding: 2vh 2vw; position: relative;
 }
 
-// ==========================================
-// GESTION DES TOURS & IA
-// ==========================================
-function passerAuJoueurSuivant() {
-    premierTourGlobal = false; 
-    joueurActuel = (joueurActuel + 1) % joueurs.length;
-    joueurs[joueurActuel].aPioche = false;
-    preparerTour();
+#adversaires { display: flex; justify-content: flex-start; gap: 15px; flex-wrap: wrap; }
+.profil-adversaire {
+    background: rgba(0, 0, 0, 0.5); padding: 1vh 2vw; border-radius: 50px;
+    display: flex; align-items: center; gap: 10px;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.1);
+}
+.avatar {
+    font-size: clamp(16px, 2vw, 24px); background: #34495e; border-radius: 50%;
+    width: clamp(30px, 3vw, 45px); height: clamp(30px, 3vw, 45px);
+    display: flex; justify-content: center; align-items: center;
+}
+.infos-adversaire h3 { color: #fff; font-size: clamp(12px, 1.2vw, 16px); }
+.infos-adversaire p { color: #bbb; font-size: clamp(10px, 1vw, 13px); font-weight: 700; }
+
+#zone-centrale {
+    display: flex; justify-content: space-between; align-items: center;
+    flex-grow: 1; gap: 2vw; margin: 2vh 0;
 }
 
-function tourIA() {
-    const j = joueurs[joueurActuel];
-    if (mancheTerminee) return;
+.pile {
+    width: clamp(70px, 8vw, 100px); height: clamp(105px, 12vw, 150px);
+    border-radius: 10px; position: relative; box-shadow: 0 8px 15px rgba(0,0,0,0.4);
+}
+
+#pioche { cursor: pointer; transition: transform 0.2s; }
+#pioche:hover { transform: scale(1.05) translateY(-5px); }
+.carte-dos { width: 100%; height: 100%; border-radius: 10px; object-fit: cover; }
+
+#compteur-pioche {
+    position: absolute; bottom: -25px; left: 0; width: 100%; text-align: center;
+    color: #fff; font-weight: 900; font-size: clamp(12px, 1.5vw, 18px);
+    text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+}
+
+#defausse {
+    border: 3px dashed rgba(255, 255, 255, 0.3);
+    display: flex; justify-content: center; align-items: center;
+    background: rgba(0,0,0,0.1); cursor: pointer; transition: all 0.2s;
+}
+#defausse:hover { box-shadow: 0 0 15px 5px rgba(255, 255, 255, 0.4); transform: scale(1.05); }
+#defausse img { width: 100%; height: 100%; border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.5); }
+
+#combinaisons {
+    background: rgba(0, 0, 0, 0.15); flex-grow: 1; height: 100%;
+    border-radius: 20px; box-shadow: inset 0 0 20px rgba(0,0,0,0.5);
+    display: flex; flex-wrap: wrap; align-content: flex-start;
+    gap: clamp(5px, 1vw, 15px); padding: 2vh 2vw; overflow-y: auto;
+    border: 1px solid rgba(255,255,255,0.05);
+}
+
+.combinaison-groupe {
+    display: flex; background: rgba(255, 255, 255, 0.1); padding: 5px;
+    border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+    border: 1px solid rgba(255,255,255,0.2); transition: transform 0.2s;
+}
+.combinaison-groupe:hover { transform: translateY(-5px); }
+
+#zone-joueur { display: flex; flex-direction: column; align-items: center; gap: 1vh; }
+.header-joueur h2 {
+    color: #fff; text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+    font-size: clamp(14px, 1.5vw, 20px); letter-spacing: 1px;
+}
+
+#main-joueur {
+    display: flex; justify-content: center; gap: clamp(3px, 0.5vw, 10px);
+    min-height: clamp(100px, 18vh, 150px); min-width: 100%; flex-wrap: nowrap;
+}
+
+.carte {
+    width: clamp(50px, 6vw, 100px); height: clamp(75px, 9vw, 150px); 
+    border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.4);
+    cursor: grab; transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    background-color: #fff; flex-shrink: 1;
+}
+.carte:hover { transform: translateY(-15px) scale(1.05); z-index: 10; }
+.carte.selectionnee {
+    transform: translateY(-25px) scale(1.05);
+    box-shadow: 0 0 20px 5px var(--or); z-index: 11; cursor: pointer;
+}
+
+.carte-table {
+    width: clamp(35px, 4.5vw, 70px); height: clamp(50px, 6.5vw, 105px);
+    border-radius: 6px; cursor: pointer; transition: all 0.2s;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.5);
+}
+.carte-table:hover { transform: translateY(-10px); }
+.carte-table.selectionnee { transform: translateY(-15px); box-shadow: 0 0 15px 4px #00d2ff; }
+
+#actions { display: flex; gap: clamp(5px, 1vw, 20px); flex-wrap: wrap; justify-content: center; }
+
+.btn-action {
+    padding: clamp(8px, 1vh, 12px) clamp(12px, 2vw, 25px);
+    font-size: clamp(11px, 1.2vw, 16px); font-weight: 700; color: white;
+    border: none; border-radius: 50px; cursor: pointer;
+    text-transform: uppercase; letter-spacing: 1px;
+    transition: all 0.2s; box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+    font-family: 'Montserrat', sans-serif;
+}
+
+.btn-action:hover:not(:disabled) { transform: translateY(-3px); box-shadow: 0 8px 20px rgba(0,0,0,0.5); }
+.btn-action:active:not(:disabled) { transform: translateY(1px); }
+.btn-action:disabled { background: #7f8c8d !important; color: #bdc3c7; cursor: not-allowed; box-shadow: none; opacity: 0.6; }
+
+.btn-bleu { background: linear-gradient(135deg, #3498db, #2980b9); }
+.btn-vert { background: linear-gradient(135deg, #2ecc71, #27ae60); }
+.btn-orange { background: linear-gradient(135deg, #e67e22, #d35400); }
+.btn-rouge { background: linear-gradient(135deg, #e74c3c, #c0392b); }
+
+.btn-action.actif {
+    box-shadow: 0 0 15px 5px var(--or) !important;
+    transform: scale(1.05); border: 2px solid var(--or);
+}
+
+#tableau-bord {
+    position: absolute; top: 2vh; right: 2vw; display: flex; gap: 10px;
+    z-index: 100; align-items: flex-start;
+}
+.score-box {
+    background: rgba(0, 0, 0, 0.6); padding: clamp(5px, 1vh, 10px) clamp(10px, 1.5vw, 20px);
+    border-radius: 10px; color: white; text-align: center;
+    border: 1px solid rgba(255,255,255,0.2); box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+}
+.score-box span { display: block; font-size: clamp(9px, 0.8vw, 12px); color: #bbb; text-transform: uppercase; }
+.score-box strong { font-size: clamp(16px, 1.8vw, 24px); color: var(--or); }
+
+/* ========================================== */
+/* --- 4. ECRANS SUPERPOSÉS (MODALS, VICTOIRE) */
+/* ========================================== */
+#ecran-victoire, #ecran-passe {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0, 0, 0, 0.9);
+    display: none; flex-direction: column; justify-content: center; align-items: center;
+    z-index: 5000; color: white; backdrop-filter: blur(10px);
+}
+#ecran-victoire { z-index: 4000; }
+#ecran-victoire h1, #ecran-passe h1 {
+    font-family: 'Cinzel', serif; font-size: clamp(30px, 5vw, 50px);
+    color: var(--or); margin-bottom: 10px;
+}
+
+#modal-regles {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0, 0, 0, 0.85); display: none;
+    justify-content: center; align-items: center;
+    z-index: 6000; backdrop-filter: blur(5px);
+}
+
+.contenu-regles {
+    background: #2c3e50; color: white; padding: 30px; border-radius: 15px;
+    max-width: 600px; width: 90%; box-shadow: 0 10px 30px rgba(0,0,0,0.8);
+    border: 2px solid var(--or);
+}
+.contenu-regles h2 { color: var(--or); text-align: center; margin-bottom: 20px; font-size: 28px; font-family: 'Cinzel', serif; }
+.contenu-regles ul { list-style-type: none; padding-left: 0; }
+.contenu-regles li { margin-bottom: 12px; font-size: 16px; line-height: 1.4; background: rgba(255,255,255,0.05); padding: 10px; border-radius: 8px; }
+
+#statut-ia {
+    position: absolute; top: 20%; left: 50%; transform: translateX(-50%);
+    background: rgba(0, 0, 0, 0.8); color: var(--or);
+    padding: 15px 30px; border-radius: 30px; font-size: 22px; font-weight: bold;
+    border: 2px solid var(--or); box-shadow: 0 0 20px rgba(241, 196, 15, 0.5);
+    z-index: 500; animation: pulse 1.5s infinite;
+}
+@keyframes pulse {
+    0% { transform: translateX(-50%) scale(1); }
+    50% { transform: translateX(-50%) scale(1.05); }
+    100% { transform: translateX(-50%) scale(1); }
+}
+
+.carte.joker, .carte-table.joker {
+    box-shadow: 0 0 15px 5px var(--or) !important;
+    border: 2px solid var(--or);
+}
+
+/* ========================================== */
+/* --- 5. RESPONSIVE (MOBILES & TABLETTES) --- */
+/* ========================================== */
+@media (max-width: 768px) {
+    .menu-container { gap: 15px; }
+    .menu-card { padding: 15px; }
+    #ecran-accueil h1 { margin-bottom: 15px; }
     
-    const statutDiv = document.getElementById("statut-ia");
-    statutDiv.style.display = "block";
-    statutDiv.textContent = `${j.nom} réfléchit...`;
-
-    setTimeout(() => {
-        let nouvelleCarte = piocherDansLeDeck();
-        if (!nouvelleCarte) return;
-        j.main.push(nouvelleCarte);
-        j.aPioche = true;
-        mettreAJourUI();
-        jouerSon(sonPiocher);
-        statutDiv.textContent = `${j.nom} a pioché une carte...`;
-
-        setTimeout(() => {
-            if (!premierTourGlobal || j.aPose) {
-                iaJoueCombinaisons(j);
-                if (j.aPose) {
-                    statutDiv.textContent = `${j.nom} pose des cartes !`;
-                    jouerSon(sonPoser);
-                }
-            }
-
-            setTimeout(() => {
-                let carteJetee = iaChoisitCarteAJeter(j);
-                j.main.splice(j.main.indexOf(carteJetee), 1);
-                carteDefausseActuelle = carteJetee;
-                
-                afficherCarteDefausse();
-                afficherTable();
-                jouerSon(sonPiocher);
-                statutDiv.textContent = `${j.nom} a défaussé.`;
-                
-                setTimeout(() => {
-                    statutDiv.style.display = "none";
-                    if (j.main.length === 0) return finDeManche(joueurActuel);
-                    passerAuJoueurSuivant();
-                }, 1000);
-
-            }, 1500);
-        }, 1500);
-    }, 1500);
-}
-
-function iaTrouveCombinaisons(main) {
-    let combinaisons = [];
-    for (let val of valeurs) {
-        let cartesMemeValeur = main.filter(c => c.valeur === val);
-        let uniques = [];
-        let couleursVues = new Set();
-        for (let c of cartesMemeValeur) {
-            if (!couleursVues.has(c.couleur)) { uniques.push(c); couleursVues.add(c.couleur); }
-        }
-        if (uniques.length >= 3) combinaisons.push(uniques.slice(0, uniques.length)); 
-    }
-    for (let coul of couleurs) {
-        let cartesCouleur = main.filter(c => c.couleur === coul);
-        cartesCouleur.sort((a, b) => valeurs.indexOf(a.valeur) - valeurs.indexOf(b.valeur));
-        let suiteActuelle = [];
-        for (let i = 0; i < cartesCouleur.length; i++) {
-            if (suiteActuelle.length === 0) suiteActuelle.push(cartesCouleur[i]);
-            else {
-                let derniere = suiteActuelle[suiteActuelle.length - 1];
-                let idxActuel = valeurs.indexOf(cartesCouleur[i].valeur);
-                let idxPrec = valeurs.indexOf(derniere.valeur);
-                if (idxActuel === idxPrec + 1) suiteActuelle.push(cartesCouleur[i]);
-                else if (idxActuel > idxPrec + 1) {
-                    if (suiteActuelle.length >= 3) combinaisons.push([...suiteActuelle]);
-                    suiteActuelle = [cartesCouleur[i]];
-                }
-            }
-        }
-        if (suiteActuelle.length >= 3) combinaisons.push([...suiteActuelle]);
-    }
-
-    let jokers = main.filter(c => c.valeur === 'joker');
-    for (let joker of jokers) {
-        for (let comb of combinaisons) {
-            if (comb.length === 3 && !comb.some(c => c.valeur === 'joker')) {
-                let testComb = [...comb, joker];
-                if (estUnBrelan(testComb) || estUneTierce(testComb)) {
-                    comb.push(joker);
-                    break;
-                }
-            }
-        }
-    }
-    return combinaisons;
-}
-
-function iaJoueCombinaisons(j) {
-    let combinaisonsPossibles = iaTrouveCombinaisons(j.main);
-    if (combinaisonsPossibles.length === 0) return;
-
-    if (!j.aPose) {
-        let brelans = combinaisonsPossibles.filter(c => estUnBrelan(c));
-        let tierces = combinaisonsPossibles.filter(c => estUneTierce(c));
-
-        if (brelans.length > 0 && tierces.length > 0) {
-            brelans.sort((a, b) => b.reduce((s, c) => s + calculerPointsCarte(c), 0) - a.reduce((s, c) => s + calculerPointsCarte(c), 0));
-            tierces.sort((a, b) => b.reduce((s, c) => s + calculerPointsCarte(c), 0) - a.reduce((s, c) => s + calculerPointsCarte(c), 0));
-            
-            let aPoser = [brelans[0], tierces[0]];
-            let points = aPoser[0].reduce((s, c) => s + calculerPointsCarte(c), 0) + aPoser[1].reduce((s, c) => s + calculerPointsCarte(c), 0);
-            
-            let restantes = [...brelans.slice(1), ...tierces.slice(1)];
-            restantes.sort((a, b) => b.reduce((s, c) => s + calculerPointsCarte(c), 0) - a.reduce((s, c) => s + calculerPointsCarte(c), 0));
-            
-            for (let comb of restantes) {
-                if (points >= 51) break;
-                aPoser.push(comb);
-                points += comb.reduce((s, c) => s + calculerPointsCarte(c), 0);
-            }
-            
-            if (points >= 51) {
-                aPoser.forEach(comb => {
-                    comb.forEach(c => j.main.splice(j.main.indexOf(c), 1));
-                    combinaisonsTable.push(comb);
-                });
-                j.aPose = true;
-                afficherTable();
-            }
-        }
-    } else {
-        combinaisonsPossibles.forEach(comb => {
-            comb.forEach(c => j.main.splice(j.main.indexOf(c), 1));
-            combinaisonsTable.push(comb);
-        });
-        afficherTable();
-    }
-}
-
-function iaChoisitCarteAJeter(j) {
-    let combinaisonsPossibles = iaTrouveCombinaisons(j.main);
-    let cartesUtiles = [];
-    combinaisonsPossibles.forEach(comb => comb.forEach(c => cartesUtiles.push(c)));
+    .grille-jeux { gap: 20px; }
+    .carte-jeu { width: 100%; max-width: 300px; padding: 20px; }
+    .icone-jeu { font-size: 50px; margin-bottom: 10px; }
     
-    let cartesInutiles = j.main.filter(c => !cartesUtiles.includes(c) && c.valeur !== 'joker');
-    if (cartesInutiles.length === 0 && niveauDifficulte !== 'facile') {
-        cartesInutiles = j.main.filter(c => !cartesUtiles.includes(c));
-    }
-
-    if (cartesInutiles.length > 0) {
-        if (niveauDifficulte === 'facile') return cartesInutiles[0];
-        else if (niveauDifficulte === 'moyen') return cartesInutiles.sort((a, b) => calculerPointsCarte(a) - calculerPointsCarte(b))[0];
-        else return cartesInutiles.sort((a, b) => calculerPointsCarte(b) - calculerPointsCarte(a))[0];
-    }
-    return j.main.sort((a, b) => calculerPointsCarte(a) - calculerPointsCarte(b))[0];
+    .boutons-grille { grid-template-columns: 1fr; }
+    .input-group { flex-direction: column; }
+    
+    #table-de-jeu { padding: 1vh 1vw; border-width: 5px; }
+    #combinaisons { padding: 10px; gap: 5px; }
+    .combinaison-groupe { padding: 3px; }
+    
+    #main-joueur { gap: 2px; }
+    .carte { width: 45px; height: 67px; }
+    .carte-table { width: 35px; height: 52px; }
+    
+    #actions { gap: 5px; margin-top: 5px; }
+    .btn-action { padding: 8px 12px; font-size: 11px; }
+}
+/* ========================================== */
+/* --- DISPOSITION AUTOUR DE LA TABLE (RAMI) --- */
+/* ========================================== */
+.zone-adversaire {
+    position: absolute;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    z-index: 10;
 }
 
-// ==========================================
-// FIN DE MANCHE
-// ==========================================
-function finDeManche(indexGagnant) {
-    mancheTerminee = true;
-    mettreAJourUI();
-    document.getElementById("zone-joueur").style.visibility = "visible";
+#adv-haut { top: 10px; left: 50%; transform: translateX(-50%); }
+#adv-gauche { top: 50%; left: 20px; transform: translateY(-50%); }
+#adv-droite { top: 50%; right: 20px; transform: translateY(-50%); }
 
-    let details = "";
-    let gagnantNom = indexGagnant !== -1 ? joueurs[indexGagnant].nom : "Personne";
-    
-    joueurs.forEach((j, i) => {
-        if (i === indexGagnant) {
-            j.score += 0;
-        } else {
-            let pts = calculerPointsMain(j.main);
-            if (!j.aPose) pts = 100; 
-            j.score += pts;
-            details += `${j.nom} a marqué : ${pts} pts<br>`;
-        }
-    });
-
-    afficherScores();
-
-    let titre = indexGagnant !== -1 ? `${gagnantNom} a gagné la manche ! 🎉` : "Manche bloquée !";
-    if (indexGagnant === 0) jouerSon(sonVictoire);
-    else if (indexGagnant === -1 || indexGagnant > 0) jouerSon(sonDefaite);
-
-    let finPartie = joueurs.some(j => j.score >= 100);
-    
-    if (finPartie) {
-        titre = "Fin de la partie !";
-        document.getElementById("btn-suivant").textContent = "Rejouer une partie";
-        document.getElementById("btn-suivant").onclick = () => location.reload();
-        details += "<br><strong>Quelqu'un a atteint 100 points ! La partie est terminée.</strong>";
-    } else {
-        document.getElementById("btn-suivant").textContent = "Manche Suivante";
-        document.getElementById("btn-suivant").onclick = () => demarrerManche();
-    }
-
-    document.getElementById("titre-victoire").textContent = titre;
-    document.getElementById("texte-victoire").innerHTML = "";
-    document.getElementById("detail-points").innerHTML = details;
-    document.getElementById("ecran-victoire").style.display = "flex";
+/* On ajuste la zone centrale pour laisser de la place aux adversaires */
+#zone-centrale {
+    margin: 60px 100px; /* Laisse de l'espace sur les côtés */
 }
-
-// ==========================================
-// INTERFACE
-// ==========================================
-document.getElementById("btn-son").addEventListener("click", function() {
-    estMuet = !estMuet;
-    this.textContent = estMuet ? "🔇" : "🔊";
-});
-
-document.getElementById("btn-fullscreen").addEventListener("click", function() {
-    if (!document.fullscreenElement) {
-        document.documentElement.requestFullscreen();
-        this.textContent = "✖";
-    } else {
-        document.exitFullscreen();
-        this.textContent = "⛶";
-    }
-});
-
-const modalRegles = document.getElementById("modal-regles");
-document.getElementById("btn-regles").addEventListener("click", () => modalRegles.style.display = "flex");
-document.getElementById("btn-fermer-regles").addEventListener("click", () => modalRegles.style.display = "none");
