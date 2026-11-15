@@ -44,6 +44,8 @@ body {
 #adversaires {
     display: flex;
     justify-content: flex-start;
+    gap: 15px;
+    flex-wrap: wrap;
 }
 .profil-adversaire {
     background: rgba(0, 0, 0, 0.5);
@@ -173,7 +175,7 @@ body {
     height: clamp(75px, 9vw, 150px); 
     border-radius: 8px;
     box-shadow: 0 4px 8px rgba(0,0,0,0.4);
-    cursor: pointer;
+    cursor: grab;
     transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
     background-color: #fff;
     flex-shrink: 1;
@@ -184,6 +186,7 @@ body {
     transform: translateY(-25px) scale(1.05);
     box-shadow: 0 0 20px 5px var(--or);
     z-index: 11;
+    cursor: pointer;
 }
 
 .carte-table {
@@ -239,6 +242,7 @@ body {
     display: flex;
     gap: 10px;
     z-index: 100;
+    align-items: flex-start;
 }
 .score-box {
     background: rgba(0, 0, 0, 0.6);
@@ -277,12 +281,13 @@ body {
     #combinaisons { padding: 10px; gap: 5px; }
     .combinaison-groupe { padding: 3px; }
 }
+
 /* --- FENÊTRE DES RÈGLES (MODAL) --- */
 #modal-regles {
     position: fixed;
     top: 0; left: 0; width: 100%; height: 100%;
     background: rgba(0, 0, 0, 0.85);
-    display: none; /* Caché par défaut */
+    display: none;
     justify-content: center;
     align-items: center;
     z-index: 3000;
@@ -299,57 +304,15 @@ body {
     box-shadow: 0 10px 30px rgba(0,0,0,0.8);
     border: 2px solid var(--or);
 }
+.contenu-regles h2 { color: var(--or); text-align: center; margin-bottom: 20px; font-size: 28px; }
+.contenu-regles ul { list-style-type: none; padding-left: 0; }
+.contenu-regles li { margin-bottom: 12px; font-size: 16px; line-height: 1.4; background: rgba(255,255,255,0.05); padding: 10px; border-radius: 8px; }
+.section-accueil { margin-bottom: 20px; text-align: center; }
+.section-accueil p { font-size: 18px; margin-bottom: 10px; color: #ddd; }
+.btn-action.actif { box-shadow: 0 0 15px 5px var(--or) !important; transform: scale(1.1); }
 
-.contenu-regles h2 {
-    color: var(--or);
-    text-align: center;
-    margin-bottom: 20px;
-    font-size: 28px;
-}
-
-.contenu-regles ul {
-    list-style-type: none;
-    padding-left: 0;
-}
-
-.contenu-regles li {
-    margin-bottom: 12px;
-    font-size: 16px;
-    line-height: 1.4;
-    background: rgba(255,255,255,0.05);
-    padding: 10px;
-    border-radius: 8px;
-}/* --- AJOUTS MULTIJOUEURS --- */
-.section-accueil {
-    margin-bottom: 20px;
-    text-align: center;
-}
-.section-accueil p {
-    font-size: 18px;
-    margin-bottom: 10px;
-    color: #ddd;
-}
-.btn-action.actif {
+/* --- STYLE SPÉCIAL POUR LES JOKERS --- */
+.carte.joker, .carte-table.joker {
     box-shadow: 0 0 15px 5px var(--or) !important;
-    transform: scale(1.1);
-}
-
-#ecran-passe {
-    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-    background: rgba(0, 0, 0, 0.95); /* Fond très sombre pour cacher les cartes */
-    display: none; flex-direction: column; justify-content: center; align-items: center;
-    z-index: 5000; color: white; backdrop-filter: blur(10px);
-}
-#ecran-passe h1 {
-    font-size: 50px; color: var(--or); margin-bottom: 10px;
-}
-/* Curseur spécial pour le glisser-déposer */
-.carte {
-    cursor: grab;
-}
-.carte:active {
-    cursor: grabbing;
-}
-.carte.selectionnee {
-    cursor: pointer; /* Si elle est sélectionnée, on peut cliquer pour annuler */
+    border: 2px solid var(--or);
 }
