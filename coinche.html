@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>La Coinche - Le Grand Jeu</title>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700;900&family=Montserrat:wght@400;700;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <style>
+        #table-coinche { background: radial-gradient(circle, #1e8449 0%, #145a32 100%); width: 98vw; height: 98vh; border-radius: 20px; border: 10px solid #5d4037; box-shadow: inset 0 0 50px rgba(0,0,0,0.6), 0 10px 30px rgba(0,0,0,0.9); display: flex; flex-direction: column; justify-content: space-between; padding: 2vh 2vw; position: relative; overflow: hidden; }
+        .adversaire-haut { position: absolute; top: 20px; left: 50%; transform: translateX(-50%); text-align: center; }
+        .adversaire-gauche { position: absolute; top: 50%; left: 20px; transform: translateY(-50%); text-align: center; }
+        .adversaire-droite { position: absolute; top: 50%; right: 20px; transform: translateY(-50%); text-align: center; }
+        .badge-joueur { background: rgba(0,0,0,0.7); color: white; padding: 5px 15px; border-radius: 20px; font-weight: bold; border: 1px solid rgba(255,255,255,0.2); margin-bottom: 10px; }
+        .badge-joueur.actif { border-color: var(--or); box-shadow: 0 0 10px var(--or); color: var(--or); }
+        #zone-pli { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 300px; height: 200px; display: flex; justify-content: center; align-items: center; }
+        .carte-pli { position: absolute; width: 70px; height: 105px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.6); transition: all 0.5s ease; }
+        .pli-bas { bottom: -50px; left: 50%; transform: translateX(-50%); z-index: 4; }
+        .pli-haut { top: -50px; left: 50%; transform: translateX(-50%) rotate(180deg); z-index: 2; }
+        .pli-gauche { left: -60px; top: 50%; transform: translateY(-50%) rotate(90deg); z-index: 3; }
+        .pli-droite { right: -60px; top: 50%; transform: translateY(-50%) rotate(-90deg); z-index: 1; }
+        #infos-coinche { position: absolute; top: 20px; right: 20px; text-align: right; background: rgba(0,0,0,0.6); padding: 15px; border-radius: 10px; color: white; border: 1px solid var(--or); min-width: 220px; }
+        .contrat-box { font-size: 20px; font-weight: bold; margin-top: 10px; color: #f1c40f; }
+        #main-coinche { display: flex; justify-content: center; gap: 10px; margin-top: auto; padding-bottom: 20px; }
+        .carte-coinche { width: 80px; height: 120px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.5); cursor: pointer; transition: transform 0.2s; }
+        .carte-coinche:hover { transform: translateY(-15px); }
+        #modal-encheres { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); display: none; flex-direction: column; justify-content: center; align-items: center; z-index: 1000; backdrop-filter: blur(5px); }
+        .encheres-box { background: #2c3e50; padding: 30px; border-radius: 15px; border: 2px solid var(--or); text-align: center; color: white; max-width: 600px; width: 90%; }
+        .boutons-suit { display: flex; gap: 10px; justify-content: center; margin: 15px 0; }
+        .btn-suit { font-size: 24px; padding: 10px 15px; border-radius: 8px; cursor: pointer; border: none; background: white; transition: 0.2s; }
+        .btn-suit:hover { transform: scale(1.1); }
+        .boutons-valeur { display: flex; gap: 5px; flex-wrap: wrap; justify-content: center; margin-bottom: 20px; }
+        .btn-valeur { padding: 10px 15px; border-radius: 5px; border: 1px solid #ccc; background: #34495e; color: white; cursor: pointer; font-weight: bold; }
+        .btn-valeur:hover { background: var(--or); color: black; }
+        .btn-passer { background: #e74c3c; color: white; font-size: 18px; padding: 10px 30px; border-radius: 20px; cursor: pointer; border: none; font-weight: bold; margin-top: 10px;}
+        #zone-coinche { text-align: center; margin-top: 20px; display: none; }
+        .btn-coinche { background: #c0392b; color: white; font-size: 20px; padding: 10px 30px; border-radius: 10px; border: 2px solid #fff; cursor: pointer; font-weight: bold; animation: pulse 1s infinite; }
+    </style>
+</head>
+<body>
+
+    <!-- ÉCRAN D'ACCUEIL COINCHE -->
+    <div id="ecran-accueil" style="display: flex;">
+        <button class="btn-retour" onclick="window.location.href='index.html'">⬅ Retour au menu</button>
+        <h1>La Coinche</h1>
+        
+        <div class="menu-container">
+            <div class="menu-card">
+                <h2 class="menu-titre">🌐 Jouer en ligne</h2>
+                <div class="boutons-ligne" style="flex-direction: column; gap: 15px; margin-top: 20px;">
+                    <button onclick="creerSalonCoinche()" class="btn-action btn-bleu" id="btn-creer-salon">➕ Créer un salon (4 places)</button>
+                    <div class="input-group">
+                        <input type="text" id="input-salon" placeholder="CODE" maxlength="6">
+                        <button onclick="rejoindreSalonCoinche()" class="btn-action btn-orange">Rejoindre</button>
+                    </div>
+                </div>
+                <div id="statut-connexion" style="text-align: center; margin-top: 15px; color: var(--or); font-weight: bold;">
+                    Connecté à Firebase...
+                </div>
+            </div>
+
+            <div class="menu-card">
+                <h2 class="menu-titre">💻 Jouer en local</h2>
+                <div id="section-difficulte">
+                    <p class="menu-sous-titre">Niveau des IA :</p>
+                    <div class="boutons-ligne">
+                        <button onclick="setDifficulteCoinche('facile')" id="btn-facile" class="btn-action btn-vert actif">Facile</button>
+                        <button onclick="setDifficulteCoinche('moyen')" id="btn-moyen" class="btn-action btn-orange">Moyen</button>
+                        <button onclick="setDifficulteCoinche('difficile')" id="btn-difficile" class="btn-action btn-rouge">Difficile</button>
+                    </div>
+                </div>
+                <button onclick="lancerCoinche()" class="btn-action btn-vert btn-jouer-principal" style="margin-top: 40px;">JOUER EN LOCAL</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ÉCRAN D'ATTENTE (LOBBY) EN LIGNE -->
+    <div id="ecran-attente" style="display: none; flex-direction: column; align-items: center; justify-content: center; height: 100vh; background: #2b1d14; color: white;">
+        <h1 style="color: var(--or); font-family: 'Cinzel';">Salon d'attente</h1>
+        <h2 style="margin-top: 20px;">Code à partager : <span id="code-salon-affiche" style="color: #3498db; font-size: 2em; letter-spacing: 5px;"></span></h2>
+        
+        <div id="liste-joueurs-salon" style="margin: 30px 0; font-size: 20px; display: flex; flex-direction: column; gap: 10px; background: rgba(0,0,0,0.5); padding: 20px; border-radius: 10px; min-width: 300px;">
+            <!-- Joueurs générés par JS -->
+        </div>
+        
+        <button id="btn-lancer-partie-en-ligne" onclick="demarrerCoincheEnLigne()" class="btn-action btn-vert" style="display: none; font-size: 20px; padding: 15px 40px;">LANCER LA PARTIE (Compléter avec IA)</button>
+        <button onclick="window.location.reload()" class="btn-action btn-rouge" style="margin-top: 15px;">Quitter le salon</button>
+    </div>
+
+    <div id="table-coinche" style="display: none;">
+        <div class="adversaire-haut"><div class="badge-joueur" id="nom-j2">Partenaire (IA)</div><img src="cartes/card_back_red.png" style="width: 50px; border-radius: 5px;"></div>
+        <div class="adversaire-gauche"><div class="badge-joueur" id="nom-j1">Adversaire Gauche</div><img src="cartes/card_back_red.png" style="width: 50px; border-radius: 5px;"></div>
+        <div class="adversaire-droite"><div class="badge-joueur" id="nom-j3">Adversaire Droite</div><img src="cartes/card_back_red.png" style="width: 50px; border-radius: 5px;"></div>
+
+        <div id="zone-pli"></div>
+
+        <div id="infos-coinche">
+            <h3>La Coinche</h3>
+            <div class="contrat-box" id="affichage-contrat">Contrat : En attente</div>
+            <p id="affichage-preneur" style="font-size: 14px; margin-top: 5px;">Preneur : -</p>
+            <p style="margin-top: 10px; font-size: 14px;">Nous : <span id="score-eq1">0</span> pts</p>
+            <p style="font-size: 14px;">Eux : <span id="score-eq2">0</span> pts</p>
+            <div id="info-belote-rebelote" style="color: var(--or); margin-top: 10px; font-weight: bold; display: none;">Belote !</div>
+        </div>
+
+        <div id="main-coinche"></div>
+        <button class="btn-retour" onclick="window.location.href='index.html'" style="z-index: 2000;">⬅ Quitter</button>
+
+        <div id="modal-encheres">
+            <div class="encheres-box">
+                <h2 style="color: var(--or); font-family: 'Cinzel', serif;">Phase d'enchères</h2>
+                <p id="message-enchere" style="margin-bottom: 15px;">À vous de parler !</p>
+                <div class="boutons-suit" id="choix-atout">
+                    <button class="btn-suit" style="color:#e74c3c" onclick="selectionnerAtout('coeur', this)">♥</button>
+                    <button class="btn-suit" style="color:#e74c3c" onclick="selectionnerAtout('carreau', this)">♦</button>
+                    <button class="btn-suit" style="color:#2c3e50" onclick="selectionnerAtout('trefle', this)">♣</button>
+                    <button class="btn-suit" style="color:#2c3e50" onclick="selectionnerAtout('pique', this)">♠</button>
+                </div>
+                <div class="boutons-valeur" id="choix-valeur"></div>
+                <button class="btn-passer" onclick="passerEnchere()">Passer</button>
+                <div id="zone-coinche">
+                    <p style="color:#ff6b6b; margin-bottom: 10px;">L'adversaire a annoncé un contrat !</p>
+                    <button class="btn-coinche" onclick="coincher()">COINCHER !</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getFirestore, doc, setDoc, getDoc, updateDoc, onSnapshot, arrayUnion } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyDGaDUUpg8ssYWtbJvQ2pxJ38gQAN5EKF0",
+            authDomain: "jeux-de-carte-multi.firebaseapp.com",
+            projectId: "jeux-de-carte-multi",
+            storageBucket: "jeux-de-carte-multi.firebasestorage.app",
+            messagingSenderId: "189668693295",
+            appId: "1:189668693295:web:b4e5f21fae692d797ebdda"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const auth = getAuth(app);
+
+        window.firebase = { db, auth, doc, setDoc, getDoc, updateDoc, onSnapshot, arrayUnion };
+
+        onAuthStateChanged(auth, (user) => {
+            if (user && typeof initCoincheOnline === 'function') {
+                initCoincheOnline(user);
+            } else if (!user) {
+                signInAnonymously(auth).catch(console.error);
+            }
+        });
+    </script>
+
+    <script src="coinche.js"></script>
+</body>
+</html>
