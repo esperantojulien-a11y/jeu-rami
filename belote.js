@@ -157,7 +157,7 @@ function chargerEtatJeuDepuisReseau(data) {
         if (joueursBelote[tourActuel].isIA) setTimeout(() => iaJoue(tourActuel), 800);
         if (pliEnCours.length === 4) setTimeout(resoudrePli, 1500);
     }
-    if(atoutActuel) document.getElementById('affichage-atout').innerHTML = `Atout : <span style="font-size:30px; color:${atoutActuel === 'coeur' || atoutActuel === 'carreau' ? 'red' : 'white'};">${getSymbole(atoutActuel)}</span>`;
+    if(atoutActuel) afficherAtoutGeant(atoutActuel);
     let maMain = joueursBelote.find(j => j.uid === currentUser.uid)?.main || [];
     afficherMainReseau(maMain); mettreAJourInfos();
     if (isHost && data.phase !== "encheres" && joueursBelote[tourActuel] && joueursBelote[tourActuel].isIA) {
@@ -274,7 +274,7 @@ function lancerEncheres() { document.getElementById('modal-encheres').style.disp
 function validerEnchere(couleur) {
     if (couleur) {
         atoutActuel = couleur; preneur = 0;
-        document.getElementById('affichage-atout').innerHTML = `Atout : <span style="font-size:30px; color:${atoutActuel === 'coeur' || atoutActuel === 'carreau' ? 'red' : 'black'};">${getSymbole(atoutActuel)}</span>`;
+        afficherAtoutGeant(atoutActuel);
         document.getElementById('modal-encheres').style.display = 'none';
         tourActuel = 0; mettreAJourInfos();
         afficherToast(`Vous avez pris à ${getSymbole(couleur)} !`);
@@ -302,7 +302,7 @@ function iaEnchere(idJoueur) {
     let seuil = (niveauDifficulteBelote === 'facile') ? 12 : (niveauDifficulteBelote === 'difficile') ? 8 : 10;
     if (meilleurScore >= seuil) {
         atoutActuel = meilleurAtout; preneur = idJoueur;
-        document.getElementById('affichage-atout').innerHTML = `Atout : <span style="font-size:30px; color:${atoutActuel === 'coeur' || atoutActuel === 'carreau' ? 'red' : 'black'};">${getSymbole(atoutActuel)}</span>`;
+        afficherAtoutGeant(atoutActuel);
         afficherToast(`${joueursBelote[idJoueur].nom} a pris à ${getSymbole(atoutActuel)} !`);
         trierMains(); tourActuel = idJoueur; mettreAJourInfos();
         document.getElementById('btn-annonces').style.display = 'block';
@@ -474,4 +474,17 @@ function finDeMancheBelote() {
         afficherToast(`Fin de la manche !<br>Nous : ${scoresBelote[1]} pts<br>Eux : ${scoresBelote[2]} pts`);
         setTimeout(() => { lancerBelote(); }, 2000);
     }
+}
+function afficherAtoutGeant(couleur) {
+    let div = document.getElementById('affichage-atout');
+    if (!div) return;
+    
+    let estRouge = (couleur === 'coeur' || couleur === 'carreau');
+    let classeCouleur = estRouge ? 'rouge' : 'noir';
+    
+    div.innerHTML = `
+        <span>Atout</span>
+        <div class="badge-atout-symbole ${classeCouleur}">${getSymbole(couleur)}</div>
+    `;
+    div.classList.add('badge-atout-geant');
 }
