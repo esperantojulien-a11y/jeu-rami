@@ -76,6 +76,36 @@
         .pli-gauche.collect { transform: translate(-800px, 0) rotate(90deg) scale(0.3); opacity: 0; }
         .pli-haut.collect { transform: translate(0, -600px) rotate(180deg) scale(0.3); opacity: 0; }
         .pli-droite.collect { transform: translate(800px, 0) rotate(-90deg) scale(0.3); opacity: 0; }
+            /* --- BADGE ATOUT TRÈS VISIBLE --- */
+        .badge-atout-geant {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.85);
+            border: 3px solid var(--or);
+            border-radius: 15px;
+            padding: 10px 30px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            box-shadow: 0 0 20px rgba(241, 196, 15, 0.6);
+            z-index: 900; /* Juste en dessous des fenêtres d'enchères */
+        }
+        .badge-atout-geant span {
+            font-size: 16px;
+            color: #ddd;
+            text-transform: uppercase;
+            font-weight: bold;
+            letter-spacing: 2px;
+        }
+        .badge-atout-symbole {
+            font-size: 50px; /* Très grand ! */
+            line-height: 1;
+            text-shadow: 2px 2px 5px rgba(0,0,0,0.8);
+        }
+        .badge-atout-symbole.rouge { color: #ff3333; }
+        .badge-atout-symbole.noir { color: #ffffff; } /* Blanc pour contraster avec le fond noir */
     </style>
 </head>
 <body>
