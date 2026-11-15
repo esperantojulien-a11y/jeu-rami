@@ -1,4 +1,167 @@
 // ==========================================
+// NAVIGATION MENU
+// ==========================================
+function ouvrirJeu(nomJeu) {
+    if (nomJeu === 'rami') {
+        document.getElementById('menu-principal').style.display = 'none';
+        document.getElementById('ecran-accueil').style.display = 'flex';
+    }
+}
+
+function retourMenu() {
+    document.getElementById('ecran-accueil').style.display = 'none';
+    document.getElementById('table-de-jeu').style.display = 'none';
+    document.getElementById('menu-principal').style.display = 'flex';
+    mancheTerminee = true;
+}
+
+// ==========================================
+// RÉSEAU ET MULTIJOUEUR (FIREBASE)
+// ==========================================
+let currentUser = null;
+let currentRoomId = null;
+let unsubscribeRoom = null;
+let unsubscribeLobby = null;
+let isHost = false;
+let gameType = "rami";
+
+window.addEventListener('load', () => {
+    if (window.firebase) {
+        window.firebase.auth.onAuthStateChanged((user) => {
+            currentUser = user;
+        });
+    }
+});
+
+function ecouterLobby() {
+    if (unsubscribeLobby) unsubscribeLobby();
+
+    const q = window.firebase.query(
+        window.firebase.collection(window.firebase.db, "rooms"),
+        window.firebase.where("status", "==", "waiting"),
+        window.firebase.where("jeu", "==", gameType)
+    );
+
+    unsubscribeLobby = window.firebase.onSnapshot(q, (snapshot) => {
+        const listeDiv = document.getElementById("liste-salons");
+        listeDiv.innerHTML = "";
+        let salonsTrouves = 0;
+
+        snapshot.forEach((doc) => {
+            const data = doc.data();
+            if (data.estPrive === false) {
+                salonsTrouves++;
+                const btn = document.createElement("button");
+                btn.className = "btn-action btn-vert";
+                btn.style.width = "100%";
+                btn.style.padding = "10px";
+                btn.style.fontSize = "14px";
+                btn.style.marginBottom = "5px";
+                btn.textContent = `Rejoindre le salon ${doc.id}`;
+                btn.onclick = () => {
+                    document.getElementById("input-salon").value = doc.id;
+                    rejoindreSalon();
+                };
+                listeDiv.appendChild(btn);
+            }
+        });
+
+        if (salonsTrouves === 0) {
+            listeDiv.innerHTML = "<p class='chargement'>Aucun salon public disponible.</p>";
+        }
+    });
+}
+
+async function creerSalon(estPrive = false) {
+    if (!currentUser) return alert("Connexion en cours, réessaie dans une seconde.");
+    
+    const roomId = Math.random().toString(36).substring(2, 8).toUpperCase();
+    
+    try {
+        await window.firebase.setDoc(window.firebase.doc(window.firebase.db, "rooms", roomId), {
+            host: currentUser.uid,
+            guest: "",
+            status: "waiting",
+            jeu: gameType,
+            estPrive: estPrive,
+            createdAt: window.firebase.serverTimestamp(),
+            gameState: {} 
+        });
+        
+        currentRoomId = roomId;
+        isHost = true;
+        
+        if (estPrive) {
+            alert(`Salon PRIVÉ créé !\n\nCode à donner à ton ami : ${roomId}\n\nCe salon n'apparaît pas dans la liste publique.`);
+        } else {
+            alert(`Salon PUBLIC créé !\nCode : ${roomId}\nIl est visible par tout le monde dans la liste des salons.`);
+        }
+        
+        ecouterSalon(roomId);
+        
+        document.getElementById("ecran-accueil").style.display = "none";
+        document.getElementById("table-de-jeu").style.display = "flex";
+        document.getElementById("info-joueur").textContent = "En attente d'un adversaire...";
+        
+    } catch (e) {
+        console.error("Erreur de création :", e);
+        alert("Erreur lors de la création du salon.");
+    }
+}
+
+async function rejoindreSalon() {
+    if (!currentUser) return alert("Connexion en cours, réessaie dans une seconde.");
+    const roomCode = document.getElementById("input-salon").value.trim().toUpperCase();
+    if (roomCode.length !== 6) return alert("Le code doit faire 6 caractères.");
+
+    const roomRef = window.firebase.doc(window.firebase.db, "rooms", roomCode);
+
+    try {
+        const docSnap = await window.firebase.getDoc(roomRef);
+        
+        if (!docSnap.exists()) return alert("Ce salon n'existe pas.");
+        
+        const data = docSnap.data();
+        if (data.status !== "waiting" || data.guest !== "") {
+            return alert("Ce salon est déjà complet ou la partie a commencé.");
+        }
+        
+        await window.firebase.updateDoc(roomRef, {
+            guest: currentUser.uid,
+            status: "playing"
+        });
+        
+        currentRoomId = roomCode;
+        isHost = false;
+        alert("Salon rejoint avec succès !");
+        
+        document.getElementById("ecran-accueil").style.display = "none";
+        document.getElementById("table-de-jeu").style.display = "flex";
+        
+        ecouterSalon(roomCode);
+        
+    } catch (e) {
+        console.error("Erreur de jointure :", e);
+        alert("Erreur lors de la connexion au salon.");
+    }
+}
+
+function ecouterSalon(roomId) {
+    if (unsubscribeRoom) unsubscribeRoom();
+    if (unsubscribeLobby) unsubscribeLobby();
+    
+    unsubscribeRoom = window.firebase.onSnapshot(window.firebase.doc(window.firebase.db, "rooms", roomId), (doc) => {
+        if (doc.exists()) {
+            const data = doc.data();
+            
+            if (isHost && data.guest !== "" && data.status === "playing") {
+                document.getElementById("info-joueur").textContent = "Adversaire connecté ! Préparation de la partie...";
+            }
+        }
+    });
+}
+
+// ==========================================
 // GESTION DU SON
 // ==========================================
 const sonPiocher = new Audio('audio/pioche.ogg');
@@ -20,13 +183,13 @@ let deck = [];
 let combinaisonsTable = []; 
 let carteDefausseActuelle = null; 
 
-let joueurs = []; // Tableau qui contiendra tous les joueurs
-let joueurActuel = 0; // Index du joueur en cours
+let joueurs = []; 
+let joueurActuel = 0; 
 let premierTourGlobal = true; 
 let mancheTerminee = false;
 
-// Paramètres de partie
 let nbJoueursTotal = 1;
+let modeJeu = 'ia';
 let niveauDifficulte = 'moyen';
 
 const couleurs = ['coeur', 'carreau', 'trefle', 'pique'];
@@ -50,8 +213,25 @@ function setNbJoueurs(nb) {
     for(let i=1; i<=4; i++) document.getElementById(`btn-j${i}`).classList.remove('actif');
     document.getElementById(`btn-j${nb}`).classList.add('actif');
     
-    // Si c'est du multi-joueurs, on cache la difficulté de l'IA
-    document.getElementById("section-difficulte").style.display = (nb === 1) ? "block" : "none";
+    if (nb === 1) {
+        setMode('ia');
+        document.getElementById("section-mode").style.display = "none";
+    } else {
+        document.getElementById("section-mode").style.display = "block";
+    }
+}
+
+function setMode(mode) {
+    modeJeu = mode;
+    document.getElementById('btn-mode-ia').classList.remove('actif');
+    document.getElementById('btn-mode-local').classList.remove('actif');
+    document.getElementById(`btn-mode-${mode}`).classList.add('actif');
+
+    if (modeJeu === 'ia') {
+        document.getElementById("section-difficulte").style.display = "block";
+    } else {
+        document.getElementById("section-difficulte").style.display = "none";
+    }
 }
 
 function setDifficulte(niveau) {
@@ -64,30 +244,47 @@ function lancerPartie() {
     document.getElementById("ecran-accueil").style.display = "none";
     document.getElementById("table-de-jeu").style.display = "flex";
     
-    // Création des joueurs
     joueurs = [];
     for (let i = 0; i < nbJoueursTotal; i++) {
+        let isIA = (modeJeu === 'ia' && i > 0);
         joueurs.push({
             id: i,
-            nom: `Joueur ${i + 1}`,
+            nom: isIA ? `IA ${i}` : `Joueur ${i + 1}`,
             main: [],
             score: 0,
             aPose: false,
-            isIA: false
+            aPioche: false,
+            isIA: isIA
         });
     }
-    
-    // Si 1 seul joueur, on ajoute l'IA
-    if (nbJoueursTotal === 1) {
-        joueurs.push({ id: 1, nom: "L'IA", main: [], score: 0, aPose: false, isIA: true });
-        document.getElementById("adversaires").innerHTML = `<div class="profil-adversaire"><div class="avatar">🤖</div><div class="infos-adversaire"><h3>L'IA <span>(${niveauDifficulte})</span></h3><p id="info-ordi">13 cartes</p></div></div>`;
-    } else {
-        document.getElementById("adversaires").innerHTML = `<div class="profil-adversaire"><div class="avatar">👥</div><div class="infos-adversaire"><h3>Partie à ${nbJoueursTotal} joueurs</h3><p>Sur le même écran</p></div></div>`;
-    }
+
+    // Nettoyage des zones
+    document.getElementById("adv-haut").innerHTML = "";
+    document.getElementById("adv-gauche").innerHTML = "";
+    document.getElementById("adv-droite").innerHTML = "";
+
+    let iaCount = 1;
+    joueurs.forEach(j => {
+        if (j.isIA) {
+            const htmlProfil = `<div class="profil-adversaire">
+                <div class="avatar">🤖</div>
+                <div class="infos-adversaire">
+                    <h3>${j.nom}</h3>
+                    <p id="info-ordi-${j.id}">13 cartes</p>
+                </div>
+            </div>`;
+
+            // Distribution spatiale
+            if (iaCount === 1) document.getElementById("adv-haut").innerHTML = htmlProfil; // 1ère IA en haut
+            else if (iaCount === 2) document.getElementById("adv-gauche").innerHTML = htmlProfil; // 2ème à gauche
+            else if (iaCount === 3) document.getElementById("adv-droite").innerHTML = htmlProfil; // 3ème à droite
+            
+            iaCount++;
+        }
+    });
 
     demarrerManche();
 }
-
 // ==========================================
 // LOGIQUE DU JEU
 // ==========================================
@@ -98,7 +295,7 @@ function demarrerManche() {
     combinaisonsHTML.innerHTML = "";
     joueurActuel = 0;
     
-    joueurs.forEach(j => { j.main = []; j.aPose = false; });
+    joueurs.forEach(j => { j.main = []; j.aPose = false; j.aPioche = false; });
     
     document.getElementById("ecran-victoire").style.display = "none";
     
@@ -110,12 +307,25 @@ function demarrerManche() {
 
 function creerDeck() {
     deck = [];
+    
+    // Les 4 images de jokers différentes de ton dossier
+    const imagesJokers = [
+        'cartes/jokers/red joker.png',
+        'cartes/jokers/black joker.png',
+        'cartes/jokers/red joker 1.png',
+        'cartes/jokers/black joker 1.png'
+    ];
+    let indexJoker = 0;
+
     for (let i = 0; i < 2; i++) {
         for (let couleur of couleurs) {
             for (let valeur of valeurs) {
                 deck.push({ valeur: valeur, couleur: couleur });
             }
         }
+        // On ajoute 2 jokers par jeu avec leur image spécifique
+        deck.push({ valeur: 'joker', couleur: 'joker', image: imagesJokers[indexJoker++] });
+        deck.push({ valeur: 'joker', couleur: 'joker', image: imagesJokers[indexJoker++] });
     }
     for (let i = deck.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
@@ -128,9 +338,10 @@ function distribuerCartes() {
         joueurs.forEach(j => j.main.push(deck.pop()));
     }
     
-    // On trie la main de chaque joueur UNE SEULE FOIS au début
     joueurs.forEach(j => {
         j.main.sort((a, b) => {
+            if (a.valeur === 'joker') return 1;
+            if (b.valeur === 'joker') return -1;
             if (a.couleur === b.couleur) return valeurs.indexOf(a.valeur) - valeurs.indexOf(b.valeur);
             return couleurs.indexOf(a.couleur) - couleurs.indexOf(b.couleur);
         });
@@ -153,19 +364,22 @@ function afficherScores() {
     });
 }
 
-// ==========================================
-// TOUR PAR TOUR
-// ==========================================
 function preparerTour() {
     afficherScores();
     const j = joueurs[joueurActuel];
     
+    joueurs.forEach(joueur => {
+        if (joueur.isIA) {
+            const el = document.getElementById(`info-ordi-${joueur.id}`);
+            if (el) el.textContent = `${joueur.main.length} cartes`;
+        }
+    });
+
     if (j.isIA) {
         document.getElementById("zone-joueur").style.visibility = "hidden";
         setTimeout(tourIA, 1500);
     } else {
-        // Si c'est un joueur humain et qu'il y a plusieurs joueurs, on affiche l'écran de passage
-        if (nbJoueursTotal > 1) {
+        if (modeJeu === 'local' && nbJoueursTotal > 1) {
             document.getElementById("titre-passe").textContent = `Au tour du ${j.nom}`;
             document.getElementById("ecran-passe").style.display = "flex";
             document.getElementById("table-de-jeu").style.visibility = "hidden";
@@ -187,69 +401,58 @@ function debutTourJoueur() {
     mettreAJourUI();
 }
 
-// ==========================================
-// AFFICHAGE
-// ==========================================
 function creerImageCarte(carte, estSurTable = false) {
     const img = document.createElement("img");
     img.classList.add(estSurTable ? "carte-table" : "carte");
-    let valAnglaise = tradValeurs[carte.valeur] || carte.valeur; 
-    let coulAnglaise = tradCouleurs[carte.couleur];
-    img.src = `cartes/${coulAnglaise}/${encodeURIComponent(valAnglaise + " of " + coulAnglaise + ".png")}`; 
-    img.alt = `${carte.valeur} de ${carte.couleur}`;
+    
+    if (carte.valeur === 'joker') {
+        // On utilise l'image du joker attribuée à la création du deck
+        img.src = carte.image || 'cartes/jokers/red joker.png'; 
+        img.classList.add("joker");
+        img.alt = "Joker";
+    } else {
+        let valAnglaise = tradValeurs[carte.valeur] || carte.valeur; 
+        let coulAnglaise = tradCouleurs[carte.couleur];
+        img.src = `cartes/${coulAnglaise}/${encodeURIComponent(valAnglaise + " of " + coulAnglaise + ".png")}`; 
+        img.alt = `${carte.valeur} de ${carte.couleur}`;
+    }
     return img;
 }
 
-// Variable globale pour mémoriser la carte en cours de déplacement
 let draggedCardIndex = null;
 
 function afficherMainJoueur(main) {
     conteneurMain.innerHTML = "";
     
-    // Plus de tri automatique ici ! On respecte l'ordre du tableau.
-
     main.forEach((carte, index) => {
         const img = creerImageCarte(carte);
-        
-        // On rend l'image "attrapable"
         img.setAttribute("draggable", "true");
         img.dataset.index = index;
 
-        // Clic normal (sélectionner pour poser)
         img.addEventListener("click", () => {
-            if (!mancheTerminee) {
+            if (!mancheTerminee && !joueurs[joueurActuel].isIA) {
                 img.classList.toggle("selectionnee");
                 jouerSon(sonPiocher);
             }
         });
 
-        // --- LOGIQUE DU GLISSER-DÉPOSER ---
         img.addEventListener("dragstart", function(e) {
-            if (mancheTerminee) return;
+            if (mancheTerminee || joueurs[joueurActuel].isIA) return;
             draggedCardIndex = index;
-            // Petit effet visuel : la carte devient transparente quand on la tire
             setTimeout(() => this.style.opacity = '0.4', 0); 
         });
 
-        img.addEventListener("dragend", function(e) {
-            this.style.opacity = '1'; // On remet l'opacité normale
-        });
-
-        img.addEventListener("dragover", function(e) {
-            e.preventDefault(); // Indispensable pour autoriser le dépôt
-        });
+        img.addEventListener("dragend", function() { this.style.opacity = '1'; });
+        img.addEventListener("dragover", function(e) { e.preventDefault(); });
 
         img.addEventListener("drop", function(e) {
             e.preventDefault();
             if (draggedCardIndex === null || draggedCardIndex === index) return;
-
-            // On échange la carte de place dans le tableau
             const mainActuelle = joueurs[joueurActuel].main;
             const carteDeplacee = mainActuelle.splice(draggedCardIndex, 1)[0];
             mainActuelle.splice(index, 0, carteDeplacee);
-
             draggedCardIndex = null;
-            afficherMainJoueur(mainActuelle); // On redessine la main dans le nouvel ordre
+            afficherMainJoueur(mainActuelle); 
         });
 
         conteneurMain.appendChild(img);
@@ -265,10 +468,8 @@ function afficherTable() {
         combinaison.forEach(carte => {
             const img = creerImageCarte(carte, true);
             img.addEventListener("click", () => {
-                if (!mancheTerminee) {
-                    // On autorise la sélection de n'importe quelle carte sur la table
-                    document.querySelectorAll('.carte-table').forEach(c => c.classList.remove('selectionnee'));
-                    img.classList.add("selectionnee");
+                if (!mancheTerminee && !joueurs[joueurActuel].isIA) {
+                    img.classList.toggle("selectionnee");
                     jouerSon(sonPiocher);
                 }
             });
@@ -286,9 +487,8 @@ function afficherCarteDefausse() {
 function mettreAJourUI() {
     document.getElementById("compteur-pioche").textContent = deck.length;
     
-    if (!mancheTerminee && joueurs[joueurActuel]) {
+    if (!mancheTerminee && joueurs[joueurActuel] && !joueurs[joueurActuel].isIA) {
         const j = joueurs[joueurActuel];
-        // On gère l'état des boutons (simplifié ici car géré en interne par les fonctions)
         btnPiocher.disabled = j.aPioche;
         btnDefausser.disabled = !j.aPioche;
         btnPoser.disabled = !j.aPioche; 
@@ -302,10 +502,11 @@ function mettreAJourUI() {
 }
 
 // ==========================================
-// RÈGLES ET COMBINAISONS
+// RÈGLES ET COMBINAISONS (AVEC JOKERS)
 // ==========================================
-function calculerPointsCarte(carte, estDernierDeSuite = false) {
-    if (carte.valeur === 'as') return estDernierDeSuite ? 11 : 1;
+function calculerPointsCarte(carte) {
+    if (carte.valeur === 'joker') return 0;
+    if (carte.valeur === 'as') return 11;
     if (['valet', 'dame', 'roi'].includes(carte.valeur)) return 10;
     return parseInt(carte.valeur);
 }
@@ -316,20 +517,42 @@ function calculerPointsMain(main) {
 
 function estUnBrelan(cartes) {
     if (cartes.length < 3 || cartes.length > 4) return false;
-    return cartes.every(c => c.valeur === cartes[0].valeur) && new Set(cartes.map(c => c.couleur)).size === cartes.length;
+    let jokers = cartes.filter(c => c.valeur === 'joker');
+    let reelles = cartes.filter(c => c.valeur !== 'joker');
+    
+    if (jokers.length > cartes.length - 2) return false;
+    if (reelles.length === 0) return false;
+
+    let val = reelles[0].valeur;
+    if (!reelles.every(c => c.valeur === val)) return false;
+    
+    let couleursSet = new Set(reelles.map(c => c.couleur));
+    if (couleursSet.size !== reelles.length) return false;
+    
+    return true;
 }
 
 function estUneTierce(cartes) {
     if (cartes.length < 3) return false;
-    if (!cartes.every(c => c.couleur === cartes[0].couleur)) return false;
-    let cartesTriées = [...cartes].sort((a, b) => valeurs.indexOf(a.valeur) - valeurs.indexOf(b.valeur));
-    if (cartesTriées.length === 3 && cartesTriées[0].valeur === 'dame' && cartesTriées[1].valeur === 'roi' && cartesTriées[2].valeur === 'as') return true;
-    if (cartesTriées[cartesTriées.length-1].valeur === 'as') return false; 
-    for (let i = 0; i < cartesTriées.length - 1; i++) {
-        if (valeurs.indexOf(cartesTriées[i+1].valeur) - valeurs.indexOf(cartesTriées[i].valeur) !== 1) return false;
+    let jokers = cartes.filter(c => c.valeur === 'joker');
+    let reelles = cartes.filter(c => c.valeur !== 'joker').sort((a, b) => valeurs.indexOf(a.valeur) - valeurs.indexOf(b.valeur));
+    
+    if (jokers.length > cartes.length - 2) return false;
+    if (reelles.length === 0) return false;
+    if (!reelles.every(c => c.couleur === reelles[0].couleur)) return false;
+
+    if (reelles.length === 3 && reelles[0].valeur === 'dame' && reelles[1].valeur === 'roi' && reelles[2].valeur === 'as' && jokers.length === 0) return true;
+    if (reelles.slice(0, -1).some(c => c.valeur === 'as')) return false; 
+
+    let trous = 0;
+    for (let i = 0; i < reelles.length - 1; i++) {
+        let diff = valeurs.indexOf(reelles[i+1].valeur) - valeurs.indexOf(reelles[i].valeur);
+        if (diff === 0) return false;
+        trous += diff - 1;
     }
-    return true;
+    return trous <= jokers.length;
 }
+
 function estCombinaisonValide(cartes) {
     return estUnBrelan(cartes) || estUneTierce(cartes);
 }
@@ -337,6 +560,9 @@ function estCombinaisonValide(cartes) {
 function decouperEnCombinaisons(cartes) {
     let pool = [...cartes];
     let groupes = [];
+    
+    let jokers = pool.filter(c => c.valeur === 'joker');
+    pool = pool.filter(c => c.valeur !== 'joker');
 
     pool.sort((a, b) => {
         if (a.couleur === b.couleur) return valeurs.indexOf(a.valeur) - valeurs.indexOf(b.valeur);
@@ -346,7 +572,6 @@ function decouperEnCombinaisons(cartes) {
     let aTrouve = true;
     while (aTrouve) {
         aTrouve = false;
-        // 1. Chercher les suites
         for (let coul of couleurs) {
             let cartesCoul = pool.filter(c => c.couleur === coul);
             if (cartesCoul.length >= 3) {
@@ -355,11 +580,7 @@ function decouperEnCombinaisons(cartes) {
                     for (let j = i + 1; j < cartesCoul.length; j++) {
                         if (valeurs.indexOf(cartesCoul[j].valeur) === valeurs.indexOf(suite[suite.length - 1].valeur) + 1) {
                             suite.push(cartesCoul[j]);
-                        } else if (suite.length === 3 && suite[0].valeur === 'dame' && suite[1].valeur === 'roi' && cartesCoul[j].valeur === 'as') {
-                            suite.push(cartesCoul[j]);
-                        } else {
-                            break;
-                        }
+                        } else break;
                     }
                     if (suite.length >= 3) {
                         groupes.push(suite);
@@ -373,26 +594,44 @@ function decouperEnCombinaisons(cartes) {
         }
         if (aTrouve) continue;
 
-        // 2. Chercher les brelans (SANS DOUBLON DE COULEUR)
         for (let val of valeurs) {
             let memeValeur = pool.filter(c => c.valeur === val);
             let uniques = [];
             let couleursVues = new Set();
             for (let c of memeValeur) {
-                if (!couleursVues.has(c.couleur)) {
-                    uniques.push(c);
-                    couleursVues.add(c.couleur);
-                }
+                if (!couleursVues.has(c.couleur)) { uniques.push(c); couleursVues.add(c.couleur); }
             }
             if (uniques.length >= 3) {
-                let brelan = uniques.slice(0, 3);
-                groupes.push(brelan);
-                brelan.forEach(c => pool.splice(pool.indexOf(c), 1));
+                groupes.push(uniques.slice(0, 3));
+                uniques.slice(0, 3).forEach(c => pool.splice(pool.indexOf(c), 1));
                 aTrouve = true;
                 break;
             }
         }
     }
+
+    for (let joker of jokers) {
+        let placed = false;
+        for (let grp of groupes) {
+            if (grp.length === 3 && estCombinaisonValide([...grp, joker])) {
+                grp.push(joker);
+                placed = true;
+                break;
+            }
+        }
+        if (!placed) {
+            for (let c of pool) {
+                if (estCombinaisonValide([c, joker, pool[0]]) && pool[0] !== c) {
+                    groupes.push([c, joker, pool[0]]);
+                    pool.splice(pool.indexOf(c), 1);
+                    pool.splice(pool.indexOf(pool[0]), 1);
+                    placed = true;
+                    break;
+                }
+            }
+        }
+    }
+
     if (pool.length > 0) return null; 
     return groupes;
 }
@@ -443,26 +682,22 @@ btnPoser.addEventListener("click", () => {
 
     let cartesHand = [];
     cartesSelectionneesHTML.forEach(imgHTML => {
-        const carteObj = j.main.find(c => `${c.valeur} de ${c.couleur}` === imgHTML.alt);
+        const carteObj = j.main.find(c => (c.valeur==='joker' && imgHTML.alt==='Joker') || `${c.valeur} de ${c.couleur}` === imgHTML.alt);
         if (carteObj) cartesHand.push(carteObj);
     });
 
-        // CAS 1 : COMPLÉTER UNE COMBINAISON EXISTANTE
     if (carteTableHTML) {
         if (!j.aPose) return alert("Vous devez d'abord faire votre ouverture de 51 points pour compléter la table !");
         if (cartesHand.length === 0) return alert("Sélectionnez les cartes de votre main que vous voulez ajouter.");
 
         const altTable = carteTableHTML.alt;
         let combIndex = -1;
-        
         combinaisonsTable.forEach((comb, i) => {
-            if (comb.some(c => `${c.valeur} de ${c.couleur}` === altTable)) combIndex = i;
+            if (comb.some(c => (c.valeur==='joker' && altTable==='Joker') || `${c.valeur} de ${c.couleur}` === altTable)) combIndex = i;
         });
 
         if (combIndex !== -1) {
             let nouvelleComb = [...combinaisonsTable[combIndex], ...cartesHand];
-            
-            // On vérifie si c'est un brelan valide (max 4) ou une suite valide
             if (estCombinaisonValide(nouvelleComb)) {
                 combinaisonsTable[combIndex] = nouvelleComb;
                 cartesHand.forEach(c => j.main.splice(j.main.indexOf(c), 1));
@@ -472,28 +707,22 @@ btnPoser.addEventListener("click", () => {
                 jouerSon(sonPoser);
                 return; 
             } else {
-                return alert("Impossible de compléter : ces cartes ne s'ajoutent pas à cette combinaison (ou le brelan dépasse 4 cartes).");
+                return alert("Impossible de compléter : ces cartes ne s'ajoutent pas à cette combinaison.");
             }
         }
     }
 
-    // CAS 2 : POSER UNE NOUVELLE COMBINAISON
     if (cartesHand.length === 0) return;
     let groupes = decouperEnCombinaisons(cartesHand);
     if (!groupes) return alert("Combinaison invalide.");
 
     let pointsTotal = groupes.reduce((sum, grp) => sum + grp.reduce((s, c) => s + calculerPointsCarte(c), 0), 0);
 
-    // RÈGLE STRICTE D'OUVERTURE
     if (!j.aPose) {
         if (pointsTotal < 51) return alert(`Total : ${pointsTotal} pts. Il en faut 51.`);
-        
         let aUnBrelan = groupes.some(grp => estUnBrelan(grp));
         let aUneTierce = groupes.some(grp => estUneTierce(grp));
-        
-        if (!aUnBrelan || !aUneTierce) {
-            return alert("Règle de Jacqueline : pour ouvrir, il faut obligatoirement au moins UNE tierce ET UN brelan !");
-        }
+        if (!aUnBrelan || !aUneTierce) return alert("Règle : pour ouvrir, il faut obligatoirement au moins UNE tierce ET UN brelan !");
     }
 
     j.aPose = true;
@@ -510,28 +739,56 @@ btnVoler.addEventListener("click", () => {
     const j = joueurs[joueurActuel];
     if (mancheTerminee || j.isIA) return;
     
-    const carteTableHTML = document.querySelector('.carte-table.selectionnee');
+    const cartesTableHTML = document.querySelectorAll('.carte-table.selectionnee');
     const cartesMainHTML = document.querySelectorAll('#main-joueur .carte.selectionnee');
-    if (!carteTableHTML || cartesMainHTML.length === 0) return alert("Sélectionnez une carte sur la table ET de votre main.");
+    
+    if (cartesTableHTML.length === 0 || cartesMainHTML.length === 0) {
+        return alert("Sélectionnez une ou plusieurs cartes sur la table ET de votre main.");
+    }
 
-    const altCarteVolee = carteTableHTML.alt;
-    let carteVolee = null, indexCombinaison = -1;
-    combinaisonsTable.forEach((comb, i) => {
-        const c = comb.find(c => `${c.valeur} de ${c.couleur}` === altCarteVolee);
-        if (c) { carteVolee = c; indexCombinaison = i; }
+    // --- CORRECTION ICI : On vérifie TOUTES les cartes sélectionnées ---
+    for (let imgHTML of cartesTableHTML) {
+        if (imgHTML.alt === 'Joker') {
+            return alert("Impossible de voler un joker !");
+        }
+    }
+
+    let combIndex = -1;
+    let cartesVolees = [];
+    let multiComb = false;
+
+    cartesTableHTML.forEach(imgHTML => {
+        const alt = imgHTML.alt;
+        combinaisonsTable.forEach((comb, i) => {
+            const c = comb.find(c => `${c.valeur} de ${c.couleur}` === alt);
+            if (c) {
+                if (combIndex !== -1 && combIndex !== i) multiComb = true;
+                combIndex = i;
+                cartesVolees.push(c);
+            }
+        });
     });
+
+    if (multiComb) return alert("Vous ne pouvez voler que dans une seule combinaison à la fois.");
+    
+    const reste = combinaisonsTable[combIndex].length - cartesVolees.length;
+    if (reste < 3) {
+        return alert(`Il doit rester au moins 3 cartes sur la table (max vol : ${combinaisonsTable[combIndex].length - 3}).`);
+    }
 
     let cartesMain = [];
     cartesMainHTML.forEach(imgHTML => {
-        const c = j.main.find(c => `${c.valeur} de ${c.couleur}` === imgHTML.alt);
+        const c = j.main.find(c => (c.valeur==='joker' && imgHTML.alt==='Joker') || `${c.valeur} de ${c.couleur}` === imgHTML.alt);
         if (c) cartesMain.push(c);
     });
 
-    let nouvelleCombinaison = [...cartesMain, carteVolee];
-    if (!decouperEnCombinaisons(nouvelleCombinaison)) return alert("Nouvelle combinaison invalide.");
-    if (combinaisonsTable[indexCombinaison].length - 1 < 3) return alert("Pas assez de cartes sur la table.");
+    let nouvelleCombinaison = [...cartesMain, ...cartesVolees];
+    if (!decouperEnCombinaisons(nouvelleCombinaison)) return alert("La nouvelle combinaison formée est invalide.");
 
-    combinaisonsTable[indexCombinaison].splice(combinaisonsTable[indexCombinaison].indexOf(carteVolee), 1);
+    cartesVolees.forEach(c => {
+        const idx = combinaisonsTable[combIndex].indexOf(c);
+        if (idx !== -1) combinaisonsTable[combIndex].splice(idx, 1);
+    });
     cartesMain.forEach(c => j.main.splice(j.main.indexOf(c), 1));
     combinaisonsTable.push(nouvelleCombinaison);
 
@@ -549,7 +806,7 @@ btnDefausser.addEventListener("click", () => {
     if (!carteSelectionneeHTML) return alert("Sélectionnez une carte à jeter.");
     
     const altCarte = carteSelectionneeHTML.alt;
-    const indexCarte = j.main.findIndex(c => `${c.valeur} de ${c.couleur}` === altCarte);
+    const indexCarte = j.main.findIndex(c => (c.valeur==='joker' && altCarte==='Joker') || `${c.valeur} de ${c.couleur}` === altCarte);
     
     if (indexCarte !== -1) {
         carteDefausseActuelle = j.main.splice(indexCarte, 1)[0];
@@ -591,65 +848,76 @@ function passerAuJoueurSuivant() {
     preparerTour();
 }
 
-// IA Tour (Uniquement si 1 joueur)
 function tourIA() {
     const j = joueurs[joueurActuel];
     if (mancheTerminee) return;
     
-    let nouvelleCarte = piocherDansLeDeck();
-    if (!nouvelleCarte) return;
-    j.main.push(nouvelleCarte);
-    mettreAJourUI();
+    const statutDiv = document.getElementById("statut-ia");
+    statutDiv.style.display = "block";
+    statutDiv.textContent = `${j.nom} réfléchit...`;
 
     setTimeout(() => {
-        if (!premierTourGlobal || j.aPose) {
-            iaJoueCombinaisons(j);
-        }
+        let nouvelleCarte = piocherDansLeDeck();
+        if (!nouvelleCarte) return;
+        j.main.push(nouvelleCarte);
+        j.aPioche = true;
+        mettreAJourUI();
+        jouerSon(sonPiocher);
+        statutDiv.textContent = `${j.nom} a pioché une carte...`;
 
         setTimeout(() => {
-            let carteJetee = iaChoisitCarteAJeter(j);
-            j.main.splice(j.main.indexOf(carteJetee), 1);
-            carteDefausseActuelle = carteJetee;
-            
-            afficherCarteDefausse();
-            afficherTable();
-            
-            if (j.main.length === 0) return finDeManche(joueurActuel);
-            passerAuJoueurSuivant();
-        }, 1000);
-    }, 1000);
+            if (!premierTourGlobal || j.aPose) {
+                iaJoueCombinaisons(j);
+                if (j.aPose) {
+                    statutDiv.textContent = `${j.nom} pose des cartes !`;
+                    jouerSon(sonPoser);
+                }
+            }
+
+            setTimeout(() => {
+                let carteJetee = iaChoisitCarteAJeter(j);
+                j.main.splice(j.main.indexOf(carteJetee), 1);
+                carteDefausseActuelle = carteJetee;
+                
+                afficherCarteDefausse();
+                afficherTable();
+                jouerSon(sonPiocher);
+                statutDiv.textContent = `${j.nom} a défaussé.`;
+                
+                setTimeout(() => {
+                    statutDiv.style.display = "none";
+                    if (j.main.length === 0) return finDeManche(joueurActuel);
+                    passerAuJoueurSuivant();
+                }, 1000);
+
+            }, 1500);
+        }, 1500);
+    }, 1500);
 }
 
 function iaTrouveCombinaisons(main) {
     let combinaisons = [];
-    // Brelans SANS DOUBLON
     for (let val of valeurs) {
         let cartesMemeValeur = main.filter(c => c.valeur === val);
         let uniques = [];
         let couleursVues = new Set();
         for (let c of cartesMemeValeur) {
-            if (!couleursVues.has(c.couleur)) {
-                uniques.push(c);
-                couleursVues.add(c.couleur);
-            }
+            if (!couleursVues.has(c.couleur)) { uniques.push(c); couleursVues.add(c.couleur); }
         }
         if (uniques.length >= 3) combinaisons.push(uniques.slice(0, uniques.length)); 
     }
-    // Tierces
     for (let coul of couleurs) {
         let cartesCouleur = main.filter(c => c.couleur === coul);
         cartesCouleur.sort((a, b) => valeurs.indexOf(a.valeur) - valeurs.indexOf(b.valeur));
         let suiteActuelle = [];
         for (let i = 0; i < cartesCouleur.length; i++) {
-            if (suiteActuelle.length === 0) {
-                suiteActuelle.push(cartesCouleur[i]);
-            } else {
-                let derniereCarte = suiteActuelle[suiteActuelle.length - 1];
-                let indexActuel = valeurs.indexOf(cartesCouleur[i].valeur);
-                let indexPrecedent = valeurs.indexOf(derniereCarte.valeur);
-                if (indexActuel === indexPrecedent + 1) {
-                    suiteActuelle.push(cartesCouleur[i]);
-                } else if (indexActuel > indexPrecedent + 1) {
+            if (suiteActuelle.length === 0) suiteActuelle.push(cartesCouleur[i]);
+            else {
+                let derniere = suiteActuelle[suiteActuelle.length - 1];
+                let idxActuel = valeurs.indexOf(cartesCouleur[i].valeur);
+                let idxPrec = valeurs.indexOf(derniere.valeur);
+                if (idxActuel === idxPrec + 1) suiteActuelle.push(cartesCouleur[i]);
+                else if (idxActuel > idxPrec + 1) {
                     if (suiteActuelle.length >= 3) combinaisons.push([...suiteActuelle]);
                     suiteActuelle = [cartesCouleur[i]];
                 }
@@ -657,38 +925,48 @@ function iaTrouveCombinaisons(main) {
         }
         if (suiteActuelle.length >= 3) combinaisons.push([...suiteActuelle]);
     }
+
+    let jokers = main.filter(c => c.valeur === 'joker');
+    for (let joker of jokers) {
+        for (let comb of combinaisons) {
+            if (comb.length === 3 && !comb.some(c => c.valeur === 'joker')) {
+                let testComb = [...comb, joker];
+                if (estUnBrelan(testComb) || estUneTierce(testComb)) {
+                    comb.push(joker);
+                    break;
+                }
+            }
+        }
+    }
     return combinaisons;
 }
+
 function iaJoueCombinaisons(j) {
     let combinaisonsPossibles = iaTrouveCombinaisons(j.main);
     if (combinaisonsPossibles.length === 0) return;
 
     if (!j.aPose) {
-        // L'IA doit OBLIGATOIREMENT avoir 1 brelan et 1 tierce pour ouvrir
         let brelans = combinaisonsPossibles.filter(c => estUnBrelan(c));
         let tierces = combinaisonsPossibles.filter(c => estUneTierce(c));
 
         if (brelans.length > 0 && tierces.length > 0) {
-            // On prend les plus grosses combinaisons
             brelans.sort((a, b) => b.reduce((s, c) => s + calculerPointsCarte(c), 0) - a.reduce((s, c) => s + calculerPointsCarte(c), 0));
             tierces.sort((a, b) => b.reduce((s, c) => s + calculerPointsCarte(c), 0) - a.reduce((s, c) => s + calculerPointsCarte(c), 0));
             
-            let combinaisonsA_Poser = [brelans[0], tierces[0]];
-            let pointsTotal = combinaisonsA_Poser[0].reduce((s, c) => s + calculerPointsCarte(c), 0) + combinaisonsA_Poser[1].reduce((s, c) => s + calculerPointsCarte(c), 0);
+            let aPoser = [brelans[0], tierces[0]];
+            let points = aPoser[0].reduce((s, c) => s + calculerPointsCarte(c), 0) + aPoser[1].reduce((s, c) => s + calculerPointsCarte(c), 0);
             
-            // Si les 2 premières ne font pas 51, on ajoute les suivantes
             let restantes = [...brelans.slice(1), ...tierces.slice(1)];
             restantes.sort((a, b) => b.reduce((s, c) => s + calculerPointsCarte(c), 0) - a.reduce((s, c) => s + calculerPointsCarte(c), 0));
             
             for (let comb of restantes) {
-                if (pointsTotal >= 51) break;
-                combinaisonsA_Poser.push(comb);
-                pointsTotal += comb.reduce((s, c) => s + calculerPointsCarte(c), 0);
+                if (points >= 51) break;
+                aPoser.push(comb);
+                points += comb.reduce((s, c) => s + calculerPointsCarte(c), 0);
             }
             
-            // Si on a réussi à faire 51 points avec au moins 1 brelan et 1 tierce :
-            if (pointsTotal >= 51) {
-                combinaisonsA_Poser.forEach(comb => {
+            if (points >= 51) {
+                aPoser.forEach(comb => {
                     comb.forEach(c => j.main.splice(j.main.indexOf(c), 1));
                     combinaisonsTable.push(comb);
                 });
@@ -697,7 +975,6 @@ function iaJoueCombinaisons(j) {
             }
         }
     } else {
-        // Si l'IA a déjà ouvert, elle pose tout ce qu'elle peut
         combinaisonsPossibles.forEach(comb => {
             comb.forEach(c => j.main.splice(j.main.indexOf(c), 1));
             combinaisonsTable.push(comb);
@@ -710,7 +987,11 @@ function iaChoisitCarteAJeter(j) {
     let combinaisonsPossibles = iaTrouveCombinaisons(j.main);
     let cartesUtiles = [];
     combinaisonsPossibles.forEach(comb => comb.forEach(c => cartesUtiles.push(c)));
-    let cartesInutiles = j.main.filter(c => !cartesUtiles.includes(c));
+    
+    let cartesInutiles = j.main.filter(c => !cartesUtiles.includes(c) && c.valeur !== 'joker');
+    if (cartesInutiles.length === 0 && niveauDifficulte !== 'facile') {
+        cartesInutiles = j.main.filter(c => !cartesUtiles.includes(c));
+    }
 
     if (cartesInutiles.length > 0) {
         if (niveauDifficulte === 'facile') return cartesInutiles[0];
@@ -730,14 +1011,13 @@ function finDeManche(indexGagnant) {
 
     let details = "";
     let gagnantNom = indexGagnant !== -1 ? joueurs[indexGagnant].nom : "Personne";
-    if (indexGagnant === -1) alert("Pioche vide, on compte les points !");
-
+    
     joueurs.forEach((j, i) => {
         if (i === indexGagnant) {
             j.score += 0;
         } else {
             let pts = calculerPointsMain(j.main);
-            if (!j.aPose) pts = 100; // Règle Jacqueline
+            if (!j.aPose) pts = 100; 
             j.score += pts;
             details += `${j.nom} a marqué : ${pts} pts<br>`;
         }
@@ -746,8 +1026,8 @@ function finDeManche(indexGagnant) {
     afficherScores();
 
     let titre = indexGagnant !== -1 ? `${gagnantNom} a gagné la manche ! 🎉` : "Manche bloquée !";
-    if (indexGagnant === joueurActuel && joueurs[joueurActuel].isIA) jouerSon(sonDefaite);
-    else if (indexGagnant === joueurActuel) jouerSon(sonVictoire);
+    if (indexGagnant === 0) jouerSon(sonVictoire);
+    else if (indexGagnant === -1 || indexGagnant > 0) jouerSon(sonDefaite);
 
     let finPartie = joueurs.some(j => j.score >= 100);
     
@@ -768,7 +1048,7 @@ function finDeManche(indexGagnant) {
 }
 
 // ==========================================
-// INTERFACE (Plein écran, Règles, Son)
+// INTERFACE
 // ==========================================
 document.getElementById("btn-son").addEventListener("click", function() {
     estMuet = !estMuet;
