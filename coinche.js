@@ -1,5 +1,5 @@
 // ==========================================
-// LOGIQUE DE LA COINCHE (V11 - Complète et Stable)
+// LOGIQUE DE LA COINCHE (V12 - Parfaite et Stable)
 // ==========================================
 
 const couleursBelote = ['coeur', 'carreau', 'trefle', 'pique'];
@@ -36,6 +36,9 @@ let joueursEnLigne = [];
 let modeEnLigne = false;
 let monSiege = 0;
 
+// ==========================================
+// NOTIFICATIONS (TOASTS)
+// ==========================================
 function afficherToast(message) {
     const container = document.getElementById('toast-container');
     if (!container) return;
@@ -46,6 +49,9 @@ function afficherToast(message) {
     setTimeout(() => { toast.remove(); }, 3500);
 }
 
+// ==========================================
+// INITIALISATION RESEAU
+// ==========================================
 function initCoincheOnline(user) {
     currentUser = user;
     document.getElementById('statut-connexion').textContent = "Connecté ! Prêt à jouer.";
@@ -152,7 +158,10 @@ function chargerEtatJeuDepuisReseau(data) {
         if (joueurs[tourActuel].isIA) setTimeout(() => iaJoue(tourActuel), 800);
         if (pliEnCours.length === 4) setTimeout(resoudrePli, 1500);
     }
-    if(atoutActuel) document.getElementById('affichage-atout').innerHTML = `Atout : <span style="font-size:30px; color:${atoutActuel === 'coeur' || atoutActuel === 'carreau' ? 'red' : 'white'};">${getSymbole(atoutActuel)}</span>`;
+    
+    // Affichage de l'atout (sécurisé)
+    if(atoutActuel) afficherAtoutGeant(atoutActuel);
+    
     let maMain = joueurs.find(j => j.uid === currentUser.uid)?.main || [];
     afficherMainReseau(maMain); mettreAJourInfos();
     if (isHost && data.phase !== "encheres" && joueurs[tourActuel] && joueurs[tourActuel].isIA) {
@@ -163,7 +172,9 @@ function chargerEtatJeuDepuisReseau(data) {
     }
 }
 
+// ==========================================
 // LOGIQUE LOCALE
+// ==========================================
 function lancerCoinche() {
     document.getElementById('ecran-accueil').style.display = 'none';
     document.getElementById('table-coinche').style.display = 'flex';
@@ -190,6 +201,7 @@ function creerDeck() {
 
 function distribuer() {
     joueurs.forEach(j => j.main = []);
+    // 3 + 3 + 2 = 8 cartes par joueur = 32 cartes
     for (let i = 0; i < 3; i++) joueurs.forEach(j => j.main.push(deck.pop()));
     for (let i = 0; i < 3; i++) joueurs.forEach(j => j.main.push(deck.pop()));
     for (let i = 0; i < 2; i++) joueurs.forEach(j => j.main.push(deck.pop()));
@@ -206,7 +218,9 @@ function trierMains() {
     afficherMain();
 }
 
-// ENCHERES
+// ==========================================
+// PHASE D'ENCHERES
+// ==========================================
 function demarrerEncheres() {
     document.getElementById('modal-encheres').style.display = 'flex';
     document.getElementById('zone-coinche').style.display = 'none';
@@ -331,9 +345,14 @@ function iaEnchere(idJoueur) {
     }
 }
 
+// --- FONCTION CORRIGÉE POUR LE BADGE GÉANT ---
 function finirEncheres() {
     document.getElementById('modal-encheres').style.display = 'none';
-    atoutActuel = couleurChoisie; contratValeur = enchereMax;
+    atoutActuel = couleurChoisie; 
+    contratValeur = enchereMax;
+    
+    afficherAtoutGeant(atoutActuel); // <--- LIGNE AJOUTÉE ICI
+    
     document.getElementById('affichage-contrat').textContent = `Contrat : ${contratValeur} au ${getSymbole(atoutActuel)}`;
     document.getElementById('affichage-preneur').textContent = `Preneur : ${joueurs[preneur].nom}`;
     afficherToast(`Contrat : ${contratValeur} au ${getSymbole(atoutActuel)} par ${joueurs[preneur].nom}`);
@@ -341,6 +360,9 @@ function finirEncheres() {
     demarrerJeu(preneur);
 }
 
+// ==========================================
+// ANNONCES (Tierce, 50, 100)
+// ==========================================
 function detecterAnnonces(main, atout) {
     let pointsAnnonces = 0; let messages = [];
     const ordreAnnonce = ['as', 'roi', 'dame', 'valet', '10', '9', '8', '7'];
@@ -377,6 +399,9 @@ function annoncerPoints() {
     }
 }
 
+// ==========================================
+// JEU
+// ==========================================
 function getSymbole(couleur) {
     if (couleur === 'coeur') return '♥'; if (couleur === 'carreau') return '♦';
     if (couleur === 'trefle') return '♣'; return '♠';
@@ -525,6 +550,9 @@ function estPlusForte(carte1, carte2) {
     return ordre.indexOf(carte1.valeur) > ordre.indexOf(carte2.valeur);
 }
 
+// ==========================================
+// FIN DE PARTIE
+// ==========================================
 function finDeMancheCoinche() {
     let equipePreneuse = joueurs[preneur].equipe; let equipeDefense = equipePreneuse === 1 ? 2 : 1;
     let pointsPreneur = scores[equipePreneuse];
@@ -545,4 +573,21 @@ function finDeMancheCoinche() {
     } else {
         setTimeout(() => { lancerCoinche(); }, 2000);
     }
+}
+
+// ==========================================
+// UI ATOUT GEANT
+// ==========================================
+function afficherAtoutGeant(couleur) {
+    let div = document.getElementById('affichage-atout');
+    if (!div) return;
+    
+    let estRouge = (couleur === 'coeur' || couleur === 'carreau');
+    let classeCouleur = estRouge ? 'rouge' : 'noir';
+    
+    div.innerHTML = `
+        <span>Atout</span>
+        <div class="badge-atout-symbole ${classeCouleur}">${getSymbole(couleur)}</div>
+    `;
+    div.classList.add('badge-atout-geant');
 }
