@@ -6,107 +6,6 @@
     <title>La Belote - Le Grand Jeu</title>
     <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700;900&family=Montserrat:wght@400;700;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
-    <style>
-        #table-belote { background: radial-gradient(circle, #1e8449 0%, #145a32 100%); width: 98vw; height: 98vh; border-radius: 20px; border: 10px solid #5d4037; box-shadow: inset 0 0 50px rgba(0,0,0,0.6), 0 10px 30px rgba(0,0,0,0.9); display: flex; flex-direction: column; justify-content: space-between; padding: 2vh 2vw; position: relative; overflow: hidden; }
-        .adversaire-haut { position: absolute; top: 20px; left: 50%; transform: translateX(-50%); text-align: center; }
-        .adversaire-gauche { position: absolute; top: 50%; left: 20px; transform: translateY(-50%); text-align: center; }
-        .adversaire-droite { position: absolute; top: 50%; right: 20px; transform: translateY(-50%); text-align: center; }
-        .badge-joueur { background: rgba(0,0,0,0.7); color: white; padding: 5px 15px; border-radius: 20px; font-weight: bold; border: 1px solid rgba(255,255,255,0.2); margin-bottom: 10px; }
-        .badge-joueur.actif { border-color: var(--or); box-shadow: 0 0 10px var(--or); color: var(--or); }
-        #zone-pli { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 300px; height: 200px; display: flex; justify-content: center; align-items: center; }
-        .carte-pli { position: absolute; width: 70px; height: 105px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.6); transition: all 0.5s ease; }
-        .pli-bas { bottom: -50px; left: 50%; transform: translateX(-50%); z-index: 4; }
-        .pli-haut { top: -50px; left: 50%; transform: translateX(-50%) rotate(180deg); z-index: 2; }
-        .pli-gauche { left: -60px; top: 50%; transform: translateY(-50%) rotate(90deg); z-index: 3; }
-        .pli-droite { right: -60px; top: 50%; transform: translateY(-50%) rotate(-90deg); z-index: 1; }
-        #infos-belote { position: absolute; top: 20px; right: 20px; text-align: right; background: rgba(0,0,0,0.6); padding: 15px; border-radius: 10px; color: white; border: 1px solid var(--or); min-width: 200px; }
-        .atout-box { font-size: 24px; font-weight: bold; margin-top: 10px; }
-        #main-belote { display: flex; justify-content: center; gap: 10px; margin-top: auto; padding-bottom: 20px; position: relative; z-index: 500; }
-        .carte-belote { width: 80px; height: 120px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.5); cursor: pointer; transition: transform 0.2s; }
-        .carte-belote:hover { transform: translateY(-15px); }
-        
-        /* --- MODAL ENCHERES BELOTE (Sans flou) --- */
-        #modal-encheres { 
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
-            background: transparent !important; 
-            backdrop-filter: none !important; 
-            -webkit-backdrop-filter: none !important;
-            display: none; flex-direction: column; align-items: center; justify-content: flex-start; 
-            padding-top: 20px; z-index: 1000; 
-        }
-        .encheres-box { 
-            background: #2c3e50; padding: 20px; border-radius: 15px; border: 2px solid var(--or); 
-            text-align: center; color: white; max-width: 500px; box-shadow: 0 10px 30px rgba(0,0,0,0.8);
-        }
-        .boutons-atout { display: flex; gap: 15px; justify-content: center; margin-top: 20px; }
-        .btn-atout { font-size: 30px; padding: 10px 20px; border-radius: 10px; cursor: pointer; border: none; background: white; transition: transform 0.2s; }
-        .btn-atout:hover { transform: scale(1.1); }
-        .btn-atout.rouge { color: #e74c3c !important; }
-        .btn-atout.noir { color: #000000 !important; }
-        
-        .btn-passer { background: #7f8c8d; color: white; font-size: 18px; padding: 10px 30px; margin-top: 20px; border-radius: 20px; cursor: pointer; border: none; font-weight: bold;}
-        .btn-passer:hover { background: #e74c3c; }
-
-        /* --- NOTIFICATIONS ÉLÉGANTES (TOASTS) --- */
-        #toast-container {
-            position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
-            z-index: 9999; display: flex; flex-direction: column; gap: 10px; align-items: center;
-            pointer-events: none; 
-        }
-        .toast {
-            background: linear-gradient(135deg, #2c3e50, #1a252f);
-            color: var(--or);
-            padding: 12px 25px;
-            border-radius: 30px;
-            border: 2px solid var(--or);
-            font-family: 'Cinzel', serif;
-            font-size: 18px;
-            font-weight: bold;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.8), 0 0 15px rgba(241, 196, 15, 0.3);
-            animation: slideDown 0.3s ease-out forwards, fadeOut 0.5s ease-in 2.5s forwards;
-            text-align: center;
-            text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
-        }
-        @keyframes slideDown { from { transform: translateY(-50px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-        @keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
-
-        /* --- ANIMATION DE RAMASSAGE DES CARTES --- */
-        .carte-pli { transition: transform 0.8s cubic-bezier(0.5, -0.5, 0.5, 1.5), opacity 0.8s; }
-        .pli-bas.collect { transform: translate(0, 600px) scale(0.3); opacity: 0; }
-        .pli-gauche.collect { transform: translate(-800px, 0) rotate(90deg) scale(0.3); opacity: 0; }
-        .pli-haut.collect { transform: translate(0, -600px) rotate(180deg) scale(0.3); opacity: 0; }
-        .pli-droite.collect { transform: translate(800px, 0) rotate(-90deg) scale(0.3); opacity: 0; }
-            /* --- BADGE ATOUT TRÈS VISIBLE --- */
-        .badge-atout-geant {
-            position: absolute;
-            top: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: rgba(0, 0, 0, 0.85);
-            border: 3px solid var(--or);
-            border-radius: 15px;
-            padding: 10px 30px;
-            display: flex;
-            align-items: center;
-            gap: 15px;
-            box-shadow: 0 0 20px rgba(241, 196, 15, 0.6);
-            z-index: 900; /* Juste en dessous des fenêtres d'enchères */
-        }
-        .badge-atout-geant span {
-            font-size: 16px;
-            color: #ddd;
-            text-transform: uppercase;
-            font-weight: bold;
-            letter-spacing: 2px;
-        }
-        .badge-atout-symbole {
-            font-size: 50px; /* Très grand ! */
-            line-height: 1;
-            text-shadow: 2px 2px 5px rgba(0,0,0,0.8);
-        }
-        .badge-atout-symbole.rouge { color: #ff3333; }
-        .badge-atout-symbole.noir { color: #ffffff; } /* Blanc pour contraster avec le fond noir */
-    </style>
 </head>
 <body>
     <div id="toast-container"></div>
@@ -152,17 +51,25 @@
     </div>
 
     <div id="table-belote" style="display: none;">
-        <div class="adversaire-haut"><div class="badge-joueur" id="nom-j2">Partenaire (IA)</div><img src="cartes/card_back_red.png" style="width: 50px; border-radius: 5px;"></div>
-        <div class="adversaire-gauche"><div class="badge-joueur" id="nom-j1">Adversaire Gauche</div><img src="cartes/card_back_red.png" style="width: 50px; border-radius: 5px;"></div>
-        <div class="adversaire-droite"><div class="badge-joueur" id="nom-j3">Adversaire Droite</div><img src="cartes/card_back_red.png" style="width: 50px; border-radius: 5px;"></div>
+        <div class="adversaire-haut"><div class="badge-joueur" id="nom-j2">Partenaire (IA)</div><div class="eventail" id="eventail-j2"></div></div>
+        <div class="adversaire-gauche"><div class="badge-joueur" id="nom-j1">Adversaire Gauche</div><div class="eventail" id="eventail-j1"></div></div>
+        <div class="adversaire-droite"><div class="badge-joueur" id="nom-j3">Adversaire Droite</div><div class="eventail" id="eventail-j3"></div></div>
 
         <div id="zone-pli"></div>
 
+        <div class="badge-atout-geant" id="badge-atout">
+            <div class="badge-atout-symbole" id="badge-atout-symbole"></div>
+            <div class="badge-atout-texte"><span>Atout</span><strong id="badge-atout-detail"></strong></div>
+        </div>
+        <div id="indicateur-tour">À VOUS DE JOUER</div>
+
         <div id="infos-belote">
-            <h3>Belote - Manche 1</h3>
-            <div class="atout-box" id="affichage-atout">Atout : En attente</div>
-            <p style="margin-top: 10px; font-size: 14px;">Nous (Vous & Partenaire) : <span id="score-eq1">0</span> pts</p>
-            <p style="font-size: 14px;">Eux (Adversaires) : <span id="score-eq2">0</span> pts</p>
+            <h3>La Belote</h3>
+            <div class="tableau-scores">
+            <div class="ts-tete"><span></span><span>Manche</span><span>Total</span></div>
+            <div class="ts-ligne"><span>Nous</span><strong id="manche-eq1">0</strong><span id="score-eq1">0</span></div>
+            <div class="ts-ligne"><span>Eux</span><strong id="manche-eq2">0</strong><span id="score-eq2">0</span></div>
+        </div>
             <div id="info-belote-rebelote" style="color: var(--or); margin-top: 10px; font-weight: bold; display: none;">Belote !</div>
         </div>
 
@@ -174,18 +81,26 @@
 
         <div id="modal-encheres">
             <div class="encheres-box">
-                <h2 style="color: var(--or); font-family: 'Cinzel', serif;">À vous de choisir !</h2>
-                <p style="margin-top: 10px;">Voulez-vous prendre la main ? Si oui, choisissez un atout.</p>
-                <div class="boutons-atout">
-                    <button class="btn-atout rouge" onclick="validerEnchere('coeur')">♥</button>
-                    <button class="btn-atout rouge" onclick="validerEnchere('carreau')">♦</button>
-                    <button class="btn-atout noir" onclick="validerEnchere('trefle')">♣</button>
-                    <button class="btn-atout noir" onclick="validerEnchere('pique')">♠</button>
+                <h2 id="titre-enchere" style="color: var(--or); font-family: 'Cinzel', serif;">Voulez-vous prendre ?</h2>
+                <p style="margin-top: 8px; font-size: 14px; opacity: 0.85;">Vous voyez vos 5 premières cartes, 3 restent inconnues.</p>
+                <p id="message-enchere" style="margin-top: 10px;">À vous de décider !</p>
+
+                <div id="boutons-encheres">
+                    <div class="boutons-atout">
+                        <button class="btn-atout rouge" onclick="validerEncherePhase2('coeur')">♥</button>
+                        <button class="btn-atout rouge" onclick="validerEncherePhase2('carreau')">♦</button>
+                        <button class="btn-atout noir" onclick="validerEncherePhase2('trefle')">♣</button>
+                        <button class="btn-atout noir" onclick="validerEncherePhase2('pique')">♠</button>
+                    </div>
+                    <button class="btn-passer" onclick="passerEnchereBelote()" style="margin-top: 15px;">Passer</button>
                 </div>
-                <button class="btn-passer" onclick="validerEnchere(null)">Passer</button>
             </div>
         </div>
+
     </div>
+
+    <!-- FENÊTRE DE FIN DE MANCHE -->
+    <div id="modal-fin-manche"><div class="fin-manche-box" id="fin-manche-contenu"></div></div>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";

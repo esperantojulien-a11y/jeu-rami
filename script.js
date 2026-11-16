@@ -185,6 +185,7 @@ let carteDefausseActuelle = null;
 
 let joueurs = []; 
 let joueurActuel = 0; 
+let donneurRami = 0; // Garde en mémoire le joueur qui distribue
 let premierTourGlobal = true; 
 let mancheTerminee = false;
 
@@ -293,14 +294,16 @@ function demarrerManche() {
     premierTourGlobal = true;
     combinaisonsTable = [];
     combinaisonsHTML.innerHTML = "";
-    joueurActuel = 0;
+    
+    // Rotation du donneur
+    donneurRami = (donneurRami + 1) % joueurs.length;
     
     joueurs.forEach(j => { j.main = []; j.aPose = false; j.aPioche = false; });
     
     document.getElementById("ecran-victoire").style.display = "none";
     
     creerDeck();
-    distribuerCartes();
+    distribuerCartes(); // Modifiée ci-dessous
     afficherScores();
     preparerTour();
 }
@@ -334,9 +337,14 @@ function creerDeck() {
 }
 
 function distribuerCartes() {
+    // 13 cartes pour tout le monde
     for (let i = 0; i < 13; i++) {
         joueurs.forEach(j => j.main.push(deck.pop()));
     }
+    
+    // Le joueur à gauche du donneur prend une 14ème carte
+    joueurActuel = (donneurRami + 1) % joueurs.length;
+    joueurs[joueurActuel].main.push(deck.pop());
     
     joueurs.forEach(j => {
         j.main.sort((a, b) => {
@@ -350,7 +358,6 @@ function distribuerCartes() {
     carteDefausseActuelle = deck.pop();
     afficherCarteDefausse();
 }
-
 function afficherScores() {
     const conteneur = document.getElementById("scores-container");
     conteneur.innerHTML = "";
@@ -533,107 +540,89 @@ function estUnBrelan(cartes) {
 }
 
 function estUneTierce(cartes) {
-    if (cartes.length < 3) return false;
-    let jokers = cartes.filter(c => c.valeur === 'joker');
-    let reelles = cartes.filter(c => c.valeur !== 'joker').sort((a, b) => valeurs.indexOf(a.valeur) - valeurs.indexOf(b.valeur));
-    
-    if (jokers.length > cartes.length - 2) return false;
+    if (cartes.length < 3 || cartes.length > 14) return false;
+    const nbJokers = cartes.filter(c => c.valeur === 'joker').length;
+    const reelles = cartes.filter(c => c.valeur !== 'joker');
+
+    if (nbJokers > cartes.length - 2) return false;
     if (reelles.length === 0) return false;
     if (!reelles.every(c => c.couleur === reelles[0].couleur)) return false;
 
-    if (reelles.length === 3 && reelles[0].valeur === 'dame' && reelles[1].valeur === 'roi' && reelles[2].valeur === 'as' && jokers.length === 0) return true;
-    if (reelles.slice(0, -1).some(c => c.valeur === 'as')) return false; 
-
-    let trous = 0;
-    for (let i = 0; i < reelles.length - 1; i++) {
-        let diff = valeurs.indexOf(reelles[i+1].valeur) - valeurs.indexOf(reelles[i].valeur);
-        if (diff === 0) return false;
-        trous += diff - 1;
-    }
-    return trous <= jokers.length;
+    // valeurAs = 0 (As bas : As-2-3) ou 13 (As haut : D-R-As)
+    const essayer = (valeurAs) => {
+        const rangs = reelles
+            .map(c => c.valeur === 'as' ? valeurAs : valeurs.indexOf(c.valeur))
+            .sort((a, b) => a - b);
+        for (let i = 0; i < rangs.length - 1; i++) if (rangs[i] === rangs[i + 1]) return false;
+        const trous = (rangs[rangs.length - 1] - rangs[0] + 1) - rangs.length;
+        const jokersRestants = nbJokers - trous;
+        const marge = rangs[0] + (13 - rangs[rangs.length - 1]); // place pour prolonger la suite
+        return trous <= nbJokers && jokersRestants <= marge;
+    };
+    return essayer(0) || essayer(13);
 }
 
 function estCombinaisonValide(cartes) {
     return estUnBrelan(cartes) || estUneTierce(cartes);
 }
 
-function decouperEnCombinaisons(cartes) {
-    let pool = [...cartes];
-    let groupes = [];
-    
-    let jokers = pool.filter(c => c.valeur === 'joker');
-    pool = pool.filter(c => c.valeur !== 'joker');
+let compteurRechercheCombinaisons = 0;
 
-    pool.sort((a, b) => {
+function chercherPartition(pool, jokersDispo) {
+    if (pool.length === 0) return jokersDispo.length === 0 ? [] : null;
+    if (++compteurRechercheCombinaisons > 300000) return null; // sécurité anti-blocage
+
+    const x = pool[0];
+    const reste = pool.slice(1);
+    const candidates = reste.filter(c => c.valeur === x.valeur || c.couleur === x.couleur);
+    const n = candidates.length;
+
+    for (let mask = 0; mask < (1 << n); mask++) {
+        const sub = [x];
+        for (let i = 0; i < n; i++) if (mask & (1 << i)) sub.push(candidates[i]);
+        if (sub.length > 14) continue;
+
+        for (let nj = 0; nj <= jokersDispo.length; nj++) {
+            const groupe = [...sub, ...jokersDispo.slice(0, nj)];
+            if (groupe.length < 3 || !estCombinaisonValide(groupe)) continue;
+            const restePool = reste.filter(c => !sub.includes(c));
+            const suite = chercherPartition(restePool, jokersDispo.slice(nj));
+            if (suite) return [groupe, ...suite];
+        }
+    }
+    return null;
+}
+
+// Si la sélection complète n'est pas posable, on cherche le meilleur sous-ensemble valide
+// (en retirant 1 puis 2 cartes qui ne servent à rien) pour ne pas bloquer le joueur.
+function trouverMeilleurSousEnsemble(cartes) {
+    const n = cartes.length;
+    if (n > 16) return null;
+    let meilleur = null, meilleurPts = -1;
+    const pts = (g) => g.reduce((s, grp) => s + grp.reduce((t, c) => t + calculerPointsCarte(c), 0), 0);
+    const essayer = (aEnlever) => {
+        const reste = cartes.filter((_, i) => !aEnlever.includes(i));
+        if (reste.length < 3) return;
+        const g = decouperEnCombinaisons(reste);
+        if (g) {
+            const p = pts(g);
+            if (p > meilleurPts) { meilleurPts = p; meilleur = { groupes: g, cartes: reste }; }
+        }
+    };
+    for (let i = 0; i < n; i++) essayer([i]);
+    if (!meilleur) for (let i = 0; i < n; i++) for (let k = i + 1; k < n; k++) essayer([i, k]);
+    return meilleur;
+}
+
+function decouperEnCombinaisons(cartes) {
+    const jokers = cartes.filter(c => c.valeur === 'joker');
+    const reelles = cartes.filter(c => c.valeur !== 'joker');
+    reelles.sort((a, b) => {
         if (a.couleur === b.couleur) return valeurs.indexOf(a.valeur) - valeurs.indexOf(b.valeur);
         return couleurs.indexOf(a.couleur) - couleurs.indexOf(b.couleur);
     });
-
-    let aTrouve = true;
-    while (aTrouve) {
-        aTrouve = false;
-        for (let coul of couleurs) {
-            let cartesCoul = pool.filter(c => c.couleur === coul);
-            if (cartesCoul.length >= 3) {
-                for (let i = 0; i <= cartesCoul.length - 3; i++) {
-                    let suite = [cartesCoul[i]];
-                    for (let j = i + 1; j < cartesCoul.length; j++) {
-                        if (valeurs.indexOf(cartesCoul[j].valeur) === valeurs.indexOf(suite[suite.length - 1].valeur) + 1) {
-                            suite.push(cartesCoul[j]);
-                        } else break;
-                    }
-                    if (suite.length >= 3) {
-                        groupes.push(suite);
-                        suite.forEach(c => pool.splice(pool.indexOf(c), 1));
-                        aTrouve = true;
-                        break;
-                    }
-                }
-            }
-            if (aTrouve) break;
-        }
-        if (aTrouve) continue;
-
-        for (let val of valeurs) {
-            let memeValeur = pool.filter(c => c.valeur === val);
-            let uniques = [];
-            let couleursVues = new Set();
-            for (let c of memeValeur) {
-                if (!couleursVues.has(c.couleur)) { uniques.push(c); couleursVues.add(c.couleur); }
-            }
-            if (uniques.length >= 3) {
-                groupes.push(uniques.slice(0, 3));
-                uniques.slice(0, 3).forEach(c => pool.splice(pool.indexOf(c), 1));
-                aTrouve = true;
-                break;
-            }
-        }
-    }
-
-    for (let joker of jokers) {
-        let placed = false;
-        for (let grp of groupes) {
-            if (grp.length === 3 && estCombinaisonValide([...grp, joker])) {
-                grp.push(joker);
-                placed = true;
-                break;
-            }
-        }
-        if (!placed) {
-            for (let c of pool) {
-                if (estCombinaisonValide([c, joker, pool[0]]) && pool[0] !== c) {
-                    groupes.push([c, joker, pool[0]]);
-                    pool.splice(pool.indexOf(c), 1);
-                    pool.splice(pool.indexOf(pool[0]), 1);
-                    placed = true;
-                    break;
-                }
-            }
-        }
-    }
-
-    if (pool.length > 0) return null; 
-    return groupes;
+    compteurRechercheCombinaisons = 0;
+    return chercherPartition(reelles, jokers);
 }
 
 // ==========================================
@@ -673,7 +662,7 @@ defausseHTML.addEventListener("click", () => {
 
 btnPoser.addEventListener("click", () => {
     const j = joueurs[joueurActuel];
-    if (premierTourGlobal || mancheTerminee || j.isIA) return;
+    if (mancheTerminee || j.isIA) return;
     
     const cartesSelectionneesHTML = document.querySelectorAll('#main-joueur .carte.selectionnee');
     const carteTableHTML = document.querySelector('.carte-table.selectionnee');
@@ -682,8 +671,8 @@ btnPoser.addEventListener("click", () => {
 
     let cartesHand = [];
     cartesSelectionneesHTML.forEach(imgHTML => {
-        const carteObj = j.main.find(c => (c.valeur==='joker' && imgHTML.alt==='Joker') || `${c.valeur} de ${c.couleur}` === imgHTML.alt);
-        if (carteObj) cartesHand.push(carteObj);
+        const carteObj = j.main[parseInt(imgHTML.dataset.index)];
+        if (carteObj && !cartesHand.includes(carteObj)) cartesHand.push(carteObj);
     });
 
     if (carteTableHTML) {
@@ -713,26 +702,34 @@ btnPoser.addEventListener("click", () => {
     }
 
     if (cartesHand.length === 0) return;
+    let cartesAPoser = cartesHand;
     let groupes = decouperEnCombinaisons(cartesHand);
-    if (!groupes) return alert("Combinaison invalide.");
+    let nonUtilisees = 0;
+    if (!groupes) {
+        // Une carte en trop dans la sélection ne doit pas bloquer : on pose ce qui est valide
+        const sous = trouverMeilleurSousEnsemble(cartesHand);
+        if (!sous) return alert("Ces cartes ne forment pas de combinaison valide.\nBrelan : 3 ou 4 cartes de même valeur et de couleurs différentes.\nTierce : 3 cartes ou plus qui se suivent dans la même couleur.");
+        groupes = sous.groupes;
+        cartesAPoser = sous.cartes;
+        nonUtilisees = cartesHand.length - cartesAPoser.length;
+    }
 
     let pointsTotal = groupes.reduce((sum, grp) => sum + grp.reduce((s, c) => s + calculerPointsCarte(c), 0), 0);
 
-    if (!j.aPose) {
-        if (pointsTotal < 51) return alert(`Total : ${pointsTotal} pts. Il en faut 51.`);
-        let aUnBrelan = groupes.some(grp => estUnBrelan(grp));
-        let aUneTierce = groupes.some(grp => estUneTierce(grp));
-        if (!aUnBrelan || !aUneTierce) return alert("Règle : pour ouvrir, il faut obligatoirement au moins UNE tierce ET UN brelan !");
+    // Ouverture : 51 points MINIMUM (51 ou plus est accepté)
+    if (!j.aPose && pointsTotal < 51) {
+        return alert(`Total : ${pointsTotal} pts. Il en faut au moins 51 pour ouvrir.`);
     }
 
     j.aPose = true;
-    cartesHand.forEach(carte => j.main.splice(j.main.indexOf(carte), 1));
+    cartesAPoser.forEach(carte => j.main.splice(j.main.indexOf(carte), 1));
     groupes.forEach(grp => combinaisonsTable.push(grp));
     
     afficherMainJoueur(j.main);
     afficherTable();
     mettreAJourUI();
     jouerSon(sonPoser);
+    if (nonUtilisees > 0) alert(`${nonUtilisees} carte(s) ne faisaient partie d'aucune combinaison : elles restent dans votre main.`);
 });
 
 btnVoler.addEventListener("click", () => {
@@ -778,8 +775,8 @@ btnVoler.addEventListener("click", () => {
 
     let cartesMain = [];
     cartesMainHTML.forEach(imgHTML => {
-        const c = j.main.find(c => (c.valeur==='joker' && imgHTML.alt==='Joker') || `${c.valeur} de ${c.couleur}` === imgHTML.alt);
-        if (c) cartesMain.push(c);
+        const c = j.main[parseInt(imgHTML.dataset.index)];
+        if (c && !cartesMain.includes(c)) cartesMain.push(c);
     });
 
     let nouvelleCombinaison = [...cartesMain, ...cartesVolees];

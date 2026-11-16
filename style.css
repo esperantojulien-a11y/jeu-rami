@@ -479,23 +479,253 @@ body {
 #zone-centrale {
     margin: 60px 100px; /* Laisse de l'espace sur les côtés */
 }
-/* --- MODAL ENCHERES BELOTE --- */
+
+/* ========================================================== */
+/* --- TOASTS (notifications) : partagés par TOUS les jeux --- */
+/* ========================================================== */
+#toast-container {
+    position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
+    z-index: 9999; display: flex; flex-direction: column; gap: 10px; align-items: center;
+    pointer-events: none; width: max-content; max-width: 92vw;
+}
+.toast {
+    background: linear-gradient(135deg, #2c3e50, #1a252f);
+    color: var(--or);
+    padding: 12px 25px;
+    border-radius: 30px;
+    border: 2px solid var(--or);
+    font-family: 'Cinzel', serif;
+    font-size: clamp(13px, 1.6vw, 18px);
+    font-weight: bold;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.8), 0 0 15px rgba(241, 196, 15, 0.3);
+    animation: slideDown 0.3s ease-out forwards, fadeOut 0.5s ease-in 2.5s forwards;
+    text-align: center;
+    text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
+}
+@keyframes slideDown { from { transform: translateY(-50px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+@keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
+@keyframes lueur { from { box-shadow: 0 0 6px var(--or); } to { box-shadow: 0 0 18px 3px var(--or); } }
+@keyframes pulse-bouton { 0% { transform: scale(1); } 50% { transform: scale(1.06); } 100% { transform: scale(1); } }
+@keyframes apparition { from { transform: scale(0.85) translateY(20px); opacity: 0; } to { transform: scale(1) translateY(0); opacity: 1; } }
+
+.icone-noire {
+    color: #ffffff;
+    text-shadow: 0 0 10px rgba(255,255,255,0.5), 0 0 25px rgba(241,196,15,0.5);
+}
+
+/* ========================================================== */
+/* --- JEUX DE PLIS (BELOTE & COINCHE) : design partagé ---   */
+/* ========================================================== */
+:root {
+    --carte-main: clamp(54px, 8.5vw, 92px);
+    --carte-pli: clamp(46px, 7vw, 78px);
+}
+
+#table-belote, #table-coinche {
+    background:
+        radial-gradient(ellipse at center, #239b52 0%, #1e8449 35%, #145a32 75%, #0b3a20 100%);
+    width: 98vw; height: 98vh; border-radius: 22px;
+    border: 10px solid #5d4037;
+    outline: 2px solid rgba(241, 196, 15, 0.25); outline-offset: -16px;
+    box-shadow: inset 0 0 70px rgba(0,0,0,0.65), 0 10px 30px rgba(0,0,0,0.9);
+    display: flex; flex-direction: column; justify-content: space-between;
+    padding: 2vh 2vw; position: relative; overflow: hidden;
+}
+
+/* --- Adversaires --- */
+.adversaire-haut { position: absolute; top: 20px; left: 50%; transform: translateX(-50%); text-align: center; z-index: 20; }
+.adversaire-gauche { position: absolute; top: 50%; left: 20px; transform: translateY(-50%); text-align: center; z-index: 20; }
+.adversaire-droite { position: absolute; top: 50%; right: 20px; transform: translateY(-50%); text-align: center; z-index: 20; }
+
+.badge-joueur {
+    background: rgba(0,0,0,0.7); color: white; padding: 5px 15px; border-radius: 20px;
+    font-weight: bold; border: 1px solid rgba(255,255,255,0.2); margin-bottom: 10px;
+    font-size: clamp(11px, 1.3vw, 15px); transition: all 0.3s;
+}
+.badge-joueur.actif { border-color: var(--or); color: var(--or); animation: lueur 1.2s ease-in-out infinite alternate; }
+
+.eventail { position: relative; display: flex; justify-content: center; align-items: center; height: 54px; }
+.dos-carte {
+    width: 34px; height: 50px; margin-left: -22px; border-radius: 5px;
+    background: #8e1b1b url('cartes/card_back_red.png') center / cover no-repeat;
+    border: 1px solid rgba(255,255,255,0.35); box-shadow: 0 3px 6px rgba(0,0,0,0.5);
+}
+.dos-carte:first-child { margin-left: 0; }
+.compteur-cartes {
+    position: absolute; right: -16px; bottom: -8px; width: 22px; height: 22px;
+    background: var(--or); color: #1a1a1a; font-weight: 900; font-size: 12px;
+    border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.6);
+}
+
+/* --- Zone du pli --- */
+#zone-pli {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    width: min(300px, 50vw); height: min(200px, 30vh);
+    display: flex; justify-content: center; align-items: center;
+}
+.carte-pli {
+    position: absolute; width: var(--carte-pli); height: calc(var(--carte-pli) * 1.5);
+    border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.6);
+    transition: transform 0.8s cubic-bezier(0.5, -0.5, 0.5, 1.5), opacity 0.8s;
+}
+.pli-bas { bottom: -50px; left: 50%; transform: translateX(-50%); z-index: 4; }
+.pli-haut { top: -50px; left: 50%; transform: translateX(-50%) rotate(180deg); z-index: 2; }
+.pli-gauche { left: -60px; top: 50%; transform: translateY(-50%) rotate(90deg); z-index: 3; }
+.pli-droite { right: -60px; top: 50%; transform: translateY(-50%) rotate(-90deg); z-index: 1; }
+.pli-bas.collect { transform: translate(0, 600px) scale(0.3); opacity: 0; }
+.pli-gauche.collect { transform: translate(-800px, 0) rotate(90deg) scale(0.3); opacity: 0; }
+.pli-haut.collect { transform: translate(0, -600px) rotate(180deg) scale(0.3); opacity: 0; }
+.pli-droite.collect { transform: translate(800px, 0) rotate(-90deg) scale(0.3); opacity: 0; }
+
+/* --- Panneau de score --- */
+#infos-belote, #infos-coinche {
+    position: absolute; top: 20px; right: 20px; text-align: left;
+    background: rgba(0,0,0,0.65); padding: 12px 16px; border-radius: 12px; color: white;
+    border: 1px solid var(--or); min-width: 220px; z-index: 30;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.6);
+}
+#infos-belote h3, #infos-coinche h3 {
+    font-family: 'Cinzel', serif; color: var(--or); text-align: center;
+    margin-bottom: 8px; letter-spacing: 1px; font-size: 18px;
+}
+.contrat-box { font-size: 15px; font-weight: bold; margin-top: 6px; color: var(--or); text-align: center; }
+#affichage-preneur { text-align: center; color: #ddd; }
+.tableau-scores { margin-top: 10px; font-size: 14px; }
+.ts-tete, .ts-ligne { display: grid; grid-template-columns: 1.1fr 1fr 1fr; gap: 8px; text-align: center; padding: 3px 0; }
+.ts-tete { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #bbb; border-bottom: 1px solid rgba(255,255,255,0.2); }
+.ts-ligne span:first-child { text-align: left; font-weight: bold; }
+.ts-ligne strong { color: var(--or); font-size: 16px; }
+#info-belote-rebelote { color: var(--or); margin-top: 8px; font-weight: bold; text-align: center; }
+
+/* --- Badge d'atout bien visible --- */
+.badge-atout-geant {
+    position: absolute; top: 80px; left: 20px; display: none; align-items: center; gap: 14px;
+    background: rgba(0, 0, 0, 0.85); border: 3px solid var(--or); border-radius: 15px;
+    padding: 8px 20px; box-shadow: 0 0 20px rgba(241, 196, 15, 0.55); z-index: 900;
+    animation: apparition 0.4s ease-out;
+}
+.badge-atout-texte { display: flex; flex-direction: column; text-align: left; }
+.badge-atout-texte span { font-size: 12px; color: #ddd; text-transform: uppercase; font-weight: bold; letter-spacing: 2px; }
+.badge-atout-texte strong { color: var(--or); font-size: 14px; }
+.badge-atout-symbole { font-size: 50px; line-height: 1; text-shadow: 2px 2px 5px rgba(0,0,0,0.8); }
+.badge-atout-symbole.rouge { color: #ff3333; }
+.badge-atout-symbole.noir { color: #ffffff; }
+
+/* --- Indicateur "à vous de jouer" --- */
+#indicateur-tour {
+    position: absolute; left: 50%; transform: translateX(-50%);
+    bottom: calc(var(--carte-main) * 1.5 + 34px);
+    background: rgba(0,0,0,0.75); color: var(--or); border: 2px solid var(--or);
+    padding: 6px 22px; border-radius: 30px; font-weight: 900; letter-spacing: 1px;
+    font-size: clamp(12px, 1.4vw, 16px); z-index: 600; display: none;
+    animation: pulse-bouton 1.4s ease-in-out infinite;
+}
+
+/* --- Votre main : en éventail --- */
+#main-belote, #main-coinche {
+    display: flex; justify-content: center; align-items: flex-end;
+    margin-top: auto; padding-bottom: 14px; position: relative; z-index: 500;
+    min-height: calc(var(--carte-main) * 1.5 + 24px);
+}
+.carte-belote, .carte-coinche {
+    width: var(--carte-main); height: calc(var(--carte-main) * 1.5);
+    margin-left: calc(var(--carte-main) * -0.3);
+    border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.5); background: #fff;
+    cursor: pointer; transition: transform 0.2s, filter 0.2s, box-shadow 0.2s;
+}
+.carte-belote:first-child, .carte-coinche:first-child { margin-left: 0; }
+.carte-belote:hover, .carte-coinche:hover { transform: translateY(-22px); z-index: 50; }
+
+/* --- Fenêtre de fin de manche --- */
+#modal-fin-manche {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: none;
+    justify-content: center; align-items: center; z-index: 8000;
+    background: rgba(0,0,0,0.72); backdrop-filter: blur(4px);
+}
+.fin-manche-box {
+    background: linear-gradient(160deg, #2c3e50, #1a252f); border: 2px solid var(--or);
+    border-radius: 18px; padding: 22px 26px; color: white; width: min(92vw, 520px);
+    text-align: center; box-shadow: 0 20px 50px rgba(0,0,0,0.85), 0 0 30px rgba(241,196,15,0.3);
+    animation: apparition 0.4s ease-out;
+}
+.fin-manche-box h2 { font-family: 'Cinzel', serif; color: var(--or); font-size: clamp(22px, 3vw, 30px); }
+.fin-resultat { margin: 10px 0 4px; font-weight: 700; font-size: 15px; line-height: 1.4; }
+.fin-resultat.ok { color: #2ecc71; }
+.fin-resultat.ko { color: #ff6b6b; }
+.fin-table { width: 100%; border-collapse: collapse; margin: 14px 0 18px; font-size: 15px; }
+.fin-table th { color: #bbb; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; padding: 6px; border-bottom: 1px solid rgba(255,255,255,0.25); }
+.fin-table td { padding: 7px 6px; border-bottom: 1px solid rgba(255,255,255,0.08); }
+.fin-table td:first-child { text-align: left; color: #ddd; }
+.fin-table tr.total td { font-weight: 900; color: var(--or); border-top: 1px solid rgba(255,255,255,0.3); }
+.fin-table tr.grand-total td { font-weight: 900; font-size: 18px; color: #fff; background: rgba(241,196,15,0.15); }
+.fin-boutons { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+
+/* --- Enchères (Belote & Coinche) --- */
 #modal-encheres {
     position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-    background: rgba(0,0,0,0.85); display: flex; flex-direction: column; justify-content: center; align-items: center;
-    z-index: 1000; backdrop-filter: blur(5px);
+    background: transparent; display: none; flex-direction: column;
+    align-items: center; justify-content: flex-start; padding-top: 20px;
+    z-index: 1000; pointer-events: none;
 }
 .encheres-box {
-    background: #2c3e50; padding: 30px; border-radius: 15px; border: 2px solid var(--or);
-    text-align: center; color: white; max-width: 500px;
+    pointer-events: auto; background: #2c3e50; padding: 15px 20px; border-radius: 15px;
+    border: 2px solid var(--or); text-align: center; color: white;
+    max-width: 800px; width: 95%; max-height: 60vh; overflow-y: auto;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.8);
 }
+#table-belote .encheres-box { max-width: 500px; padding: 20px; }
 .boutons-atout { display: flex; gap: 15px; justify-content: center; margin-top: 20px; }
-.btn-atout { 
-    font-size: 30px; padding: 10px 20px; border-radius: 10px; cursor: pointer; border: none;
-    background: white; transition: transform 0.2s;
-}
+.btn-atout { font-size: 30px; padding: 10px 20px; border-radius: 10px; cursor: pointer; border: none; background: white; transition: transform 0.2s; }
 .btn-atout:hover { transform: scale(1.1); }
-.btn-atout.rouge { color: #e74c3c; }
-.btn-atout.noir { color: #2c3e50; }
-.btn-passer { background: #7f8c8d; color: white; font-size: 18px; padding: 10px 30px; margin-top: 20px; border-radius: 20px; cursor: pointer; border: none; font-weight: bold;}
+.btn-atout.rouge { color: #e74c3c !important; }
+.btn-atout.noir { color: #000000 !important; }
+.btn-passer { background: #7f8c8d; color: white; font-size: 18px; padding: 10px 30px; margin-top: 20px; border-radius: 20px; cursor: pointer; border: none; font-weight: bold; }
 .btn-passer:hover { background: #e74c3c; }
+.historique { display: flex; justify-content: center; gap: 10px; margin-bottom: 15px; flex-wrap: wrap; }
+.annonce-joueur { background: rgba(255,255,255,0.1); padding: 10px; border-radius: 8px; min-width: 100px; font-size: 14px; }
+.annonce-joueur strong { display: block; color: var(--or); margin-bottom: 5px; }
+.annonce-joueur.actif { border: 2px solid var(--or); background: rgba(241, 196, 15, 0.2); }
+.boutons-encheres { display: flex; flex-wrap: wrap; gap: 5px; justify-content: center; margin-bottom: 15px; }
+.btn-valeur { padding: 8px 12px; border-radius: 5px; border: 1px solid #ccc; background: #34495e; color: white; cursor: pointer; font-weight: bold; font-size: 14px; }
+.btn-valeur:hover { background: var(--or); color: black; }
+.btn-valeur.speciale { background: #c0392b; border-color: #fff; }
+.boutons-couleur { display: flex; gap: 10px; justify-content: center; margin-bottom: 15px; }
+.btn-couleur { font-size: 28px; padding: 8px 20px; border-radius: 8px; cursor: pointer; border: none; background: white; transition: 0.2s; }
+.btn-couleur:hover { transform: scale(1.1); }
+.btn-couleur.rouge { color: #e74c3c !important; }
+.btn-couleur.noir { color: #000000 !important; }
+#zone-coinche { text-align: center; margin-top: 15px; display: none; border-top: 1px solid #555; padding-top: 15px; }
+.btn-coinche { background: #c0392b; color: white; font-size: 18px; padding: 10px 30px; border-radius: 10px; border: 2px solid #fff; cursor: pointer; font-weight: bold; animation: pulse-bouton 1s infinite; }
+
+/* --- Mobiles / petits écrans (Belote & Coinche) --- */
+@media (max-width: 768px) {
+    :root { --carte-main: clamp(44px, 11vw, 70px); --carte-pli: clamp(38px, 10vw, 58px); }
+    #table-belote, #table-coinche { border-width: 5px; padding: 1vh 1vw; outline-offset: -10px; }
+    #infos-belote, #infos-coinche { top: 8px; right: 8px; padding: 8px 10px; min-width: 0; }
+    #infos-belote h3, #infos-coinche h3 { font-size: 13px; margin-bottom: 4px; }
+    .tableau-scores { font-size: 11px; margin-top: 4px; }
+    .ts-tete { font-size: 9px; }
+    .ts-ligne strong { font-size: 13px; }
+    .contrat-box { font-size: 11px; }
+    #affichage-preneur { font-size: 11px !important; }
+    .badge-atout-geant { top: 56px; left: 8px; padding: 5px 12px; gap: 8px; }
+    .badge-atout-symbole { font-size: 32px; }
+    .adversaire-haut { top: 8px; }
+    .adversaire-gauche { left: 4px; }
+    .adversaire-droite { right: 4px; }
+    .dos-carte { width: 24px; height: 36px; margin-left: -16px; }
+    .eventail { height: 40px; }
+    #zone-pli { width: 210px; height: 140px; }
+    .pli-bas { bottom: -35px; } .pli-haut { top: -35px; }
+    .pli-gauche { left: -35px; } .pli-droite { right: -35px; }
+    .btn-retour { top: 8px !important; left: 8px !important; padding: 6px 12px !important; font-size: 12px; }
+    .encheres-box { padding: 10px; max-height: 55vh; }
+}
+@media (max-height: 520px) {
+    :root { --carte-main: clamp(38px, 7vw, 56px); --carte-pli: clamp(34px, 6vw, 48px); }
+    .badge-atout-symbole { font-size: 30px; }
+}
+
+/* Compteur de l'adversaire de droite : à l'intérieur de l'écran */
+.adversaire-droite .compteur-cartes { right: auto; left: -16px; }

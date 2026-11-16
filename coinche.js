@@ -1,5 +1,5 @@
 // ==========================================
-// LOGIQUE DE LA COINCHE (V12 - Parfaite et Stable)
+// LOGIQUE DE LA COINCHE (V15 - Sons & Règles Officielles)
 // ==========================================
 
 const couleursBelote = ['coeur', 'carreau', 'trefle', 'pique'];
@@ -7,6 +7,7 @@ const valeursBelote = ['7', '8', '9', '10', 'valet', 'dame', 'roi', 'as'];
 const pointsBelote = { 'as': 11, '10': 10, 'roi': 4, 'dame': 3, 'valet': 2, '9': 0, '8': 0, '7': 0 };
 const ordreAtout = ['7', '8', 'dame', 'roi', '10', 'as', '9', 'valet'];
 const ordreNormal = ['7', '8', '9', 'valet', 'dame', 'roi', '10', 'as'];
+const ordreSuite = ['7', '8', '9', '10', 'valet', 'dame', 'roi', 'as'];
 
 let deck = [];
 let joueurs = [];
@@ -15,9 +16,11 @@ let tourActuel = 0;
 let pliEnCours = [];
 let cartesPli = [];
 let scores = { 1: 0, 2: 0 };
+let scoresManche = { 1: 0, 2: 0 };
 let nombrePli = 0;
 let partieBloquee = false; 
 let preneur = -1;
+let donneur = 0; // NOUVEAU : Le donneur tourne
 let contratValeur = 0;
 let coinche = false;
 let niveauDifficulteCoinche = 'facile';
@@ -27,7 +30,22 @@ let couleurChoisie = null;
 let passeursConsecutifs = 0;
 let historiqueEncheres = ["-", "-", "-", "-"]; 
 let aAnnonce = false; 
+let estMuet = false;
 
+// SONS
+const sonPiocher = new Audio('audio/pioche.ogg');
+const sonPoser = new Audio('audio/pose.ogg');
+const sonVictoire = new Audio('audio/victoire.ogg');
+const sonDefaite = new Audio('audio/defaite.ogg');
+
+function jouerSon(sound) {
+    if (estMuet) return;
+    sound.currentTime = 0;
+    sound.volume = 0.3;
+    sound.play().catch(e => console.log("Son bloqué"));
+}
+
+// Variables Réseau
 let currentUser = null;
 let currentRoomId = null;
 let isHost = false;
@@ -50,12 +68,13 @@ function afficherToast(message) {
 }
 
 // ==========================================
-// INITIALISATION RESEAU
+// RÉSEAU (Firebase)
 // ==========================================
 function initCoincheOnline(user) {
     currentUser = user;
     document.getElementById('statut-connexion').textContent = "Connecté ! Prêt à jouer.";
 }
+
 function setDifficulteCoinche(niveau) {
     niveauDifficulteCoinche = niveau;
     ['facile', 'moyen', 'difficile'].forEach(n => document.getElementById(`btn-${n}`).classList.remove('actif'));
@@ -152,15 +171,17 @@ function chargerEtatJeuDepuisReseau(data) {
         const action = data.actionEnAttente;
         window.firebase.updateDoc(window.firebase.doc(window.firebase.db, "rooms", currentRoomId), { "actionEnAttente": null });
         let carteJouee = joueurs[action.joueur].main.splice(action.indexCarte, 1)[0];
-        if(carteJouee) { pliEnCours.push({ joueur: action.joueur, carte: carteJouee }); cartesPli.push({ joueur: action.joueur, carte: carteJouee }); }
+        if(carteJouee) { 
+            jouerSon(sonPoser);
+            pliEnCours.push({ joueur: action.joueur, carte: carteJouee }); cartesPli.push({ joueur: action.joueur, carte: carteJouee }); 
+        }
         afficherPli(); tourActuel = (tourActuel + 1) % 4;
         window.firebase.updateDoc(window.firebase.doc(window.firebase.db, "rooms", currentRoomId), { "joueurs": joueurs, "tour": tourActuel });
         if (joueurs[tourActuel].isIA) setTimeout(() => iaJoue(tourActuel), 800);
         if (pliEnCours.length === 4) setTimeout(resoudrePli, 1500);
     }
     
-    // Affichage de l'atout (sécurisé)
-    if(atoutActuel) afficherAtoutGeant(atoutActuel);
+    if(atoutActuel && preneur !== -1) afficherAtoutSurJoueur();
     
     let maMain = joueurs.find(j => j.uid === currentUser.uid)?.main || [];
     afficherMainReseau(maMain); mettreAJourInfos();
@@ -173,20 +194,56 @@ function chargerEtatJeuDepuisReseau(data) {
 }
 
 // ==========================================
-// LOGIQUE LOCALE
+// LOGIQUE LOCALE (V16 - Règles corrigées)
 // ==========================================
+
+// Détail des points de la manche EN COURS (remis à zéro à chaque manche)
+let detailManche = { plis: { 1: 0, 2: 0 }, belote: { 1: 0, 2: 0 }, annonces: { 1: 0, 2: 0 } };
+let plisGagnes = { 1: 0, 2: 0 };
+let plisParJoueur = [0, 0, 0, 0];
+
+function totalManche(eq) {
+    return detailManche.plis[eq] + detailManche.belote[eq] + detailManche.annonces[eq];
+}
+
 function lancerCoinche() {
     document.getElementById('ecran-accueil').style.display = 'none';
     document.getElementById('table-coinche').style.display = 'flex';
     modeEnLigne = false;
-    joueurs = [
-        { id: 0, nom: "Vous", main: [], equipe: 1, isIA: false },
-        { id: 1, nom: "Gauche", main: [], equipe: 2, isIA: true },
-        { id: 2, nom: "Partenaire", main: [], equipe: 1, isIA: true },
-        { id: 3, nom: "Droite", main: [], equipe: 2, isIA: true }
-    ];
-    creerDeck(); distribuer(); demarrerEncheres();
+
+    // --- REMISE À ZÉRO COMPLÈTE DE LA MANCHE ---
+    detailManche = { plis: { 1: 0, 2: 0 }, belote: { 1: 0, 2: 0 }, annonces: { 1: 0, 2: 0 } };
+    plisGagnes = { 1: 0, 2: 0 };
+    plisParJoueur = [0, 0, 0, 0];
+    nombrePli = 0;
+    pliEnCours = [];
+    cartesPli = [];
+    atoutActuel = null;
+    preneur = -1;
+    contratValeur = 0;
+    atoutSelectionneEnchere = null;
+    partieBloquee = true;
     aAnnonce = false;
+    document.getElementById('zone-pli').innerHTML = "";
+    document.getElementById('affichage-contrat').textContent = "Contrat : En attente";
+    document.getElementById('affichage-preneur').textContent = "Preneur : -";
+    cacherBadgeAtout();
+
+    joueurs = [
+        { id: 0, nom: "Vous", main: [], equipe: 1, isIA: false, aBelote: false, beloteJouees: 0 },
+        { id: 1, nom: "Gauche", main: [], equipe: 2, isIA: true, aBelote: false, beloteJouees: 0 },
+        { id: 2, nom: "Partenaire", main: [], equipe: 1, isIA: true, aBelote: false, beloteJouees: 0 },
+        { id: 3, nom: "Droite", main: [], equipe: 2, isIA: true, aBelote: false, beloteJouees: 0 }
+    ];
+
+    donneur = (donneur + 1) % 4;
+    afficherToast(`C'est ${joueurs[donneur].nom} qui distribue.`);
+
+    creerDeck(); distribuer();
+
+    tourActuel = (donneur + 1) % 4;
+    mettreAJourInfos();
+    demarrerEncheres();
     document.getElementById('btn-annonces').style.display = 'none';
 }
 
@@ -201,7 +258,6 @@ function creerDeck() {
 
 function distribuer() {
     joueurs.forEach(j => j.main = []);
-    // 3 + 3 + 2 = 8 cartes par joueur = 32 cartes
     for (let i = 0; i < 3; i++) joueurs.forEach(j => j.main.push(deck.pop()));
     for (let i = 0; i < 3; i++) joueurs.forEach(j => j.main.push(deck.pop()));
     for (let i = 0; i < 2; i++) joueurs.forEach(j => j.main.push(deck.pop()));
@@ -219,18 +275,20 @@ function trierMains() {
 }
 
 // ==========================================
-// PHASE D'ENCHERES
+// ENCHERES
 // ==========================================
 function demarrerEncheres() {
     document.getElementById('modal-encheres').style.display = 'flex';
     document.getElementById('zone-coinche').style.display = 'none';
     enchereMax = 0; couleurChoisie = null; passeursConsecutifs = 0; historiqueEncheres = ["-", "-", "-", "-"];
-    preneur = -1; tourActuel = 0; 
-    mettreAJourTableauEncheres(); afficherOptionsEncheres(0);
+    preneur = -1;
+    atoutSelectionneEnchere = null;
+    document.querySelectorAll('.btn-couleur').forEach(b => b.style.outline = 'none');
+    mettreAJourTableauEncheres(); afficherOptionsEncheres(tourActuel);
 }
 
 function mettreAJourTableauEncheres() {
-    for(let i=0; i<4; i++) {
+    for (let i = 0; i < 4; i++) {
         document.getElementById(`hist-j${i}`).innerHTML = `<strong>${joueurs[i].nom}</strong>${historiqueEncheres[i]}`;
         document.getElementById(`hist-j${i}`).className = `annonce-joueur ${tourActuel === i ? 'actif' : ''}`;
     }
@@ -239,14 +297,18 @@ function mettreAJourTableauEncheres() {
 function afficherOptionsEncheres(idJoueur) {
     mettreAJourTableauEncheres();
     if (passeursConsecutifs >= 3 && enchereMax > 0) { finirEncheres(); return; }
-    if (passeursConsecutifs >= 4 && enchereMax === 0) { afficherToast("Tout le monde a passé ! Redistribution."); return lancerCoinche(); }
+    if (passeursConsecutifs >= 4 && enchereMax === 0) {
+        document.getElementById('modal-encheres').style.display = 'none';
+        afficherToast("Tout le monde a passé ! Redistribution.");
+        return setTimeout(lancerCoinche, 1500);
+    }
 
     if (idJoueur === 0) {
         document.getElementById('message-enchere').textContent = "C'est à vous de parler !";
         document.getElementById('zone-choix-atout').style.display = 'block';
-        document.getElementById('btn-passer-action').style.display = 'inline-block'; 
+        document.getElementById('btn-passer-action').style.display = 'inline-block';
         const container = document.getElementById('choix-valeur'); container.innerHTML = "";
-        
+
         [80, 90, 100, 110, 120, 130, 140, 150, 160].forEach(val => {
             if (val > enchereMax) {
                 const btn = document.createElement('button'); btn.className = "btn-valeur"; btn.textContent = val;
@@ -256,13 +318,15 @@ function afficherOptionsEncheres(idJoueur) {
         if (enchereMax < 250) {
             const btnCapot = document.createElement('button'); btnCapot.className = "btn-valeur speciale";
             btnCapot.textContent = "CAPOT (250)"; btnCapot.onclick = () => validerEnchere(250); container.appendChild(btnCapot);
+        }
+        if (enchereMax < 500) {
             const btnGen = document.createElement('button'); btnGen.className = "btn-valeur speciale";
             btnGen.textContent = "GÉNÉRALE (500)"; btnGen.onclick = () => validerEnchere(500); container.appendChild(btnGen);
         }
     } else {
         document.getElementById('message-enchere').textContent = `L'IA ${joueurs[idJoueur].nom} réfléchit...`;
-        document.getElementById('zone-choix-atout').style.display = 'none'; 
-        document.getElementById('btn-passer-action').style.display = 'none'; 
+        document.getElementById('zone-choix-atout').style.display = 'none';
+        document.getElementById('btn-passer-action').style.display = 'none';
         setTimeout(() => iaEnchere(idJoueur), 800);
     }
 }
@@ -290,12 +354,11 @@ function passerEnchere() {
 
 function passerAuSuivantEnchere() {
     if (passeursConsecutifs >= 3 && enchereMax > 0) { finirEncheres(); return; }
-    if (passeursConsecutifs >= 4 && enchereMax === 0) { afficherToast("Tout le monde a passé ! Redistribution."); return lancerCoinche(); }
     tourActuel = (tourActuel + 1) % 4; afficherOptionsEncheres(tourActuel);
 }
 
 function evaluerMain(main) {
-    let evalScores = {coeur:0, carreau:0, trefle:0, pique:0}; let basePoints = 0;
+    let evalScores = { coeur: 0, carreau: 0, trefle: 0, pique: 0 }; let basePoints = 0;
     main.forEach(c => { if (!c) return; if (c.valeur === 'as') basePoints += 11; if (c.valeur === '10') basePoints += 10; });
     for (let s of couleursBelote) {
         let score = basePoints; let nbAtouts = 0;
@@ -318,11 +381,11 @@ function iaEnchere(idJoueur) {
     const main = joueurs[idJoueur].main; let evalScores = evaluerMain(main);
     let bestSuit = null; let bestScore = 0;
     for (let s of couleursBelote) { if (evalScores[s] > bestScore) { bestScore = evalScores[s]; bestSuit = s; } }
-    
+
     let seuil = (niveauDifficulteCoinche === 'facile') ? 60 : (niveauDifficulteCoinche === 'difficile' ? 35 : 45);
     let doitParler = false; let nouvelleValeur = enchereMax === 0 ? 80 : enchereMax + 10; let nouvelleCouleur = bestSuit;
     let estPartenaire = (preneur !== -1) && (joueurs[preneur].equipe === joueurs[idJoueur].equipe);
-    
+
     if (estPartenaire) {
         if (enchereMax < 140 && bestScore > 30) { doitParler = true; nouvelleValeur = enchereMax + 10; nouvelleCouleur = couleurChoisie; }
     } else {
@@ -345,42 +408,78 @@ function iaEnchere(idJoueur) {
     }
 }
 
-// --- FONCTION CORRIGÉE POUR LE BADGE GÉANT ---
+function aBeloteEnMain(main) {
+    return main.some(c => c && c.couleur === atoutActuel && c.valeur === 'roi')
+        && main.some(c => c && c.couleur === atoutActuel && c.valeur === 'dame');
+}
+
 function finirEncheres() {
     document.getElementById('modal-encheres').style.display = 'none';
-    atoutActuel = couleurChoisie; 
+    atoutActuel = couleurChoisie;
     contratValeur = enchereMax;
-    
-    afficherAtoutGeant(atoutActuel); // <--- LIGNE AJOUTÉE ICI
-    
+    partieBloquee = true; // bloqué le temps des annonces
+
+    afficherAtoutSurJoueur();
+    afficherBadgeAtout(`${contratValeur} · ${joueurs[preneur].nom}`);
+
     document.getElementById('affichage-contrat').textContent = `Contrat : ${contratValeur} au ${getSymbole(atoutActuel)}`;
     document.getElementById('affichage-preneur').textContent = `Preneur : ${joueurs[preneur].nom}`;
     afficherToast(`Contrat : ${contratValeur} au ${getSymbole(atoutActuel)} par ${joueurs[preneur].nom}`);
+    jouerSon(sonPoser);
+
+    joueurs.forEach(j => {
+        // Belote-Rebelote : valable pour TOUS les joueurs
+        j.aBelote = aBeloteEnMain(j.main);
+        j.beloteJouees = 0;
+        if (j.isIA) {
+            let res = detecterAnnonces(j.main, atoutActuel);
+            if (res.points > 0) {
+                detailManche.annonces[j.equipe] += res.points;
+                afficherToast(`${j.nom} annonce :<br>${res.messages}`);
+            }
+        }
+    });
+    if (joueurs[0].aBelote) afficherToast(`Vous avez Belote-Rebelote !<br>Jouez le Roi et la Dame d'atout (+20 pts)`);
+    mettreAJourInfos();
+
     document.getElementById('btn-annonces').style.display = 'block';
-    demarrerJeu(preneur);
+
+    // Le jeu commence par le joueur à gauche du donneur
+    tourActuel = (donneur + 1) % 4;
+    setTimeout(() => {
+        partieBloquee = false;
+        demarrerJeu(tourActuel);
+    }, 3000);
 }
 
 // ==========================================
-// ANNONCES (Tierce, 50, 100)
+// ANNONCES (Tierce / Cinquante / Cent) - TOUTES les couleurs, atout compris
 // ==========================================
 function detecterAnnonces(main, atout) {
     let pointsAnnonces = 0; let messages = [];
-    const ordreAnnonce = ['as', 'roi', 'dame', 'valet', '10', '9', '8', '7'];
-    let cartesParCouleur = {coeur:[], carreau:[], trefle:[], pique:[]};
-    main.forEach(c => { if (c && c.couleur !== atout) cartesParCouleur[c.couleur].push(c.valeur); });
+    let cartesParCouleur = { coeur: [], carreau: [], trefle: [], pique: [] };
+    main.forEach(c => { if (c) cartesParCouleur[c.couleur].push(c.valeur); });
 
     for (let coul in cartesParCouleur) {
-        let valeursPresentes = cartesParCouleur[coul];
-        let maxSuite = 0; let suiteActuelle = 0;
-        ordreAnnonce.forEach((val) => {
-            if (valeursPresentes.includes(val)) { suiteActuelle++; if (suiteActuelle > maxSuite) maxSuite = suiteActuelle; }
-            else suiteActuelle = 0;
-        });
+        let cartes = cartesParCouleur[coul];
+        if (cartes.length < 3) continue;
+        cartes.sort((a, b) => ordreSuite.indexOf(a) - ordreSuite.indexOf(b));
+        let maxSuite = 1; let suiteActuelle = 1;
+
+        for (let i = 0; i < cartes.length - 1; i++) {
+            let idxActuel = ordreSuite.indexOf(cartes[i]);
+            let idxSuivant = ordreSuite.indexOf(cartes[i + 1]);
+            if (idxSuivant === idxActuel + 1) {
+                suiteActuelle++;
+                if (suiteActuelle > maxSuite) maxSuite = suiteActuelle;
+            } else { suiteActuelle = 1; }
+        }
+
         if (maxSuite >= 3) {
             let pts = 0; let nom = "";
             if (maxSuite === 3) { pts = 20; nom = "Tierce"; }
             else if (maxSuite === 4) { pts = 50; nom = "Cinquante"; }
-            else if (maxSuite >= 5) { pts = 100; nom = "Cent"; }
+            else { pts = 100; nom = "Cent"; }
             pointsAnnonces += pts; messages.push(`${nom} au ${getSymbole(coul)} (${pts} pts)`);
         }
     }
@@ -391,9 +490,11 @@ function annoncerPoints() {
     if (aAnnonce) return;
     let res = detecterAnnonces(joueurs[0].main, atoutActuel);
     if (res.points > 0) {
-        scores[joueurs[0].equipe] += res.points; mettreAJourInfos();
+        detailManche.annonces[joueurs[0].equipe] += res.points;
+        mettreAJourInfos();
         afficherToast(`Annonces :<br>${res.messages}`);
         aAnnonce = true; document.getElementById('btn-annonces').style.display = 'none';
+        jouerSon(sonVictoire);
     } else {
         afficherToast("Aucune annonce (Tierce/50/100) !");
     }
@@ -415,7 +516,12 @@ function getImageCarte(carte) {
 
 function afficherMain() {
     const conteneur = document.getElementById('main-coinche'); conteneur.innerHTML = "";
-    joueurs[0].main.forEach((carte, index) => {
+    const main = joueurs[0].main;
+    // (Plus d'aide visuelle : aucune carte n'est mise en surbrillance ni grisée)
+    const monTour = !modeEnLigne && !partieBloquee && tourActuel === 0 && !!atoutActuel && pliEnCours.length < 4;
+    const couleurDemandee = pliEnCours.length > 0 ? pliEnCours[0].carte.couleur : null;
+    majIndicateurTour(monTour);
+    main.forEach((carte, index) => {
         if (!carte) return;
         const img = document.createElement('img'); img.src = getImageCarte(carte); img.className = "carte-coinche";
         img.onclick = () => jouerCarte(0, index); conteneur.appendChild(img);
@@ -443,46 +549,122 @@ function afficherPli() {
 }
 
 function mettreAJourInfos() {
-    document.getElementById('score-eq1').textContent = scores[1]; document.getElementById('score-eq2').textContent = scores[2];
+    const set = (id, v) => { const e = document.getElementById(id); if (e) e.textContent = v; };
+    set('score-eq1', scores[1]);            // total de la partie
+    set('score-eq2', scores[2]);
+    set('manche-eq1', totalManche(1));      // points de la manche en cours
+    set('manche-eq2', totalManche(2));
     if (joueurs.length === 4) {
-        document.getElementById('nom-j2').textContent = joueurs[2].nom; document.getElementById('nom-j1').textContent = joueurs[1].nom;
-        document.getElementById('nom-j3').textContent = joueurs[3].nom;
-        document.getElementById('nom-j2').className = `badge-joueur ${tourActuel === 2 ? 'actif' : ''}`;
-        document.getElementById('nom-j1').className = `badge-joueur ${tourActuel === 1 ? 'actif' : ''}`;
-        document.getElementById('nom-j3').className = `badge-joueur ${tourActuel === 3 ? 'actif' : ''}`;
+        for (let i = 1; i <= 3; i++) {
+            const el = document.getElementById(`nom-j${i}`);
+            if (el) el.className = `badge-joueur ${tourActuel === i ? 'actif' : ''}`;
+        }
+        afficherAdversaires();
+        if (joueurs[0].main) afficherMain();
     }
 }
 
-function estCoupValide(idJoueur, indexCarte, cartesMain, couleurDemandee) {
+// Qui est actuellement maître du pli (couleur demandée / atout, bien comparé)
+function trouverMaitrePli(pli) {
+    const couleurDemandee = pli[0].carte.couleur;
+    let meilleur = pli[0];
+    for (let i = 1; i < pli.length; i++) {
+        const c = pli[i].carte;
+        const m = meilleur.carte;
+        if (c.couleur === atoutActuel && m.couleur !== atoutActuel) {
+            meilleur = pli[i];
+        } else if (c.couleur === m.couleur && (c.couleur === atoutActuel || c.couleur === couleurDemandee)) {
+            const ordre = (c.couleur === atoutActuel) ? ordreAtout : ordreNormal;
+            if (ordre.indexOf(c.valeur) > ordre.indexOf(m.valeur)) meilleur = pli[i];
+        }
+    }
+    return meilleur;
+}
+
+// Règles officielles : fournir > (monter à l'atout) ; sinon couper sauf si le partenaire est maître
+function estCoupValide(idJoueur, indexCarte, cartesMain, couleurDemandee, silencieux = false) {
     if (!couleurDemandee) return true;
-    const carte = cartesMain[indexCarte]; if (!carte) return false;
+    const carte = cartesMain[indexCarte];
+    if (!carte) return false;
+    const msg = (t) => { if (!silencieux && !modeEnLigne) afficherToast(t); };
+
     const aCouleur = cartesMain.some(c => c && c.couleur === couleurDemandee);
-    if (aCouleur && carte.couleur !== couleurDemandee) { if (!modeEnLigne) afficherToast(`Vous devez fournir du ${couleurDemandee} !`); return false; }
-    if (!aCouleur && carte.couleur !== atoutActuel) {
-        const aAtout = cartesMain.some(c => c && c.couleur === atoutActuel);
-        if (aAtout) { if (!modeEnLigne) afficherToast(`Vous devez couper à l'atout !`); return false; }
+    const atoutsMain = cartesMain.filter(c => c && c.couleur === atoutActuel);
+
+    let meilleurAtoutPli = -1;
+    pliEnCours.forEach(p => {
+        if (p.carte.couleur === atoutActuel) meilleurAtoutPli = Math.max(meilleurAtoutPli, ordreAtout.indexOf(p.carte.valeur));
+    });
+
+    if (aCouleur) {
+        if (carte.couleur !== couleurDemandee) { msg(`Vous devez fournir du ${couleurDemandee} !`); return false; }
+        if (couleurDemandee === atoutActuel) {
+            const idx = ordreAtout.indexOf(carte.valeur);
+            const aPlusFort = atoutsMain.some(c => ordreAtout.indexOf(c.valeur) > meilleurAtoutPli);
+            if (aPlusFort && idx < meilleurAtoutPli) { msg("Vous devez monter à l'atout !"); return false; }
+        }
+        return true;
+    }
+
+    const maitre = trouverMaitrePli(pliEnCours);
+    const partenaireMaitre = joueurs[maitre.joueur].equipe === joueurs[idJoueur].equipe;
+    if (partenaireMaitre) return true; // le partenaire tient : on joue ce qu'on veut
+
+    if (atoutsMain.length > 0) {
+        if (carte.couleur !== atoutActuel) { msg("Vous n'avez pas la couleur : vous devez couper à l'atout !"); return false; }
+        const idx = ordreAtout.indexOf(carte.valeur);
+        const aPlusFort = atoutsMain.some(c => ordreAtout.indexOf(c.valeur) > meilleurAtoutPli);
+        if (aPlusFort && idx < meilleurAtoutPli) { msg("Vous devez surcouper !"); return false; }
     }
     return true;
 }
 
 function demarrerJeu(premierJoueur) {
     tourActuel = premierJoueur; mettreAJourInfos();
+    afficherMain();
     if (tourActuel !== 0) setTimeout(() => iaJoue(tourActuel), 800);
 }
 
 function jouerCarte(idJoueur, indexCarte) {
     if (tourActuel !== idJoueur || partieBloquee) return;
+    const joueur = joueurs[idJoueur];
     const couleurDemandee = pliEnCours.length > 0 ? pliEnCours[0].carte.couleur : null;
-    if (!estCoupValide(idJoueur, indexCarte, joueurs[idJoueur].main, couleurDemandee)) return;
+    if (!estCoupValide(idJoueur, indexCarte, joueur.main, couleurDemandee)) return;
 
-    let carteJouee = joueurs[idJoueur].main.splice(indexCarte, 1)[0]; if (!carteJouee) return;
-    pliEnCours.push({ joueur: idJoueur, carte: carteJouee }); cartesPli.push({ joueur: idJoueur, carte: carteJouee });
-    afficherPli(); afficherMain();
-    
-    if (nombrePli === 0) document.getElementById('btn-annonces').style.display = 'none';
-    
-    if (pliEnCours.length === 4) { partieBloquee = true; setTimeout(resoudrePli, 1000); }
-    else { tourActuel = (tourActuel + 1) % 4; mettreAJourInfos(); if (tourActuel !== 0) setTimeout(() => iaJoue(tourActuel), 800); }
+    let carteJouee = joueur.main.splice(indexCarte, 1)[0];
+    if (!carteJouee) return;
+
+    jouerSon(sonPoser);
+
+    // BELOTE / REBELOTE (pour tous les joueurs, +20 pts à son équipe dès la Rebelote)
+    if (joueur.aBelote && carteJouee.couleur === atoutActuel && (carteJouee.valeur === 'roi' || carteJouee.valeur === 'dame')) {
+        joueur.beloteJouees++;
+        if (joueur.beloteJouees === 1) {
+            afficherToast(`<strong>${joueur.nom} : BELOTE !</strong>`);
+        } else {
+            detailManche.belote[joueur.equipe] += 20;
+            afficherToast(`<strong>${joueur.nom} : REBELOTE !</strong> (+20 pts)`);
+            mettreAJourInfos();
+        }
+    }
+
+    pliEnCours.push({ joueur: idJoueur, carte: carteJouee });
+    cartesPli.push({ joueur: idJoueur, carte: carteJouee });
+    afficherPli();
+    if (pliEnCours.length === 4) partieBloquee = true;
+    afficherMain();
+
+    // Le bouton d'annonce disparaît quand VOUS jouez votre première carte
+    if (idJoueur === 0 && nombrePli === 0) document.getElementById('btn-annonces').style.display = 'none';
+
+    if (pliEnCours.length === 4) {
+        partieBloquee = true;
+        setTimeout(resoudrePli, 1000);
+    } else {
+        tourActuel = (tourActuel + 1) % 4;
+        mettreAJourInfos();
+        if (tourActuel !== 0) setTimeout(() => iaJoue(tourActuel), 800);
+    }
 }
 
 function jouerCarteReseau(monSiege, indexCarte) {
@@ -498,37 +680,47 @@ function iaJoue(idJoueur) {
     let indexCarte = choisirCarteIA(idJoueur); if (indexCarte !== -1) jouerCarte(idJoueur, indexCarte);
 }
 
+// L'IA ne choisit QUE parmi les cartes autorisées
 function choisirCarteIA(idJoueur) {
-    const main = joueurs[idJoueur].main; if (main.length === 0) return -1;
+    const main = joueurs[idJoueur].main;
+    if (main.length === 0) return -1;
     const couleurDemandee = pliEnCours.length > 0 ? pliEnCours[0].carte.couleur : null;
-    let indexCarte = 0;
-    if (couleurDemandee) {
-        let cartesMemeCouleur = main.map((c, i) => (c && c.couleur === couleurDemandee) ? i : -1).filter(i => i !== -1);
-        if (cartesMemeCouleur.length > 0) indexCarte = cartesMemeCouleur[0];
-        else {
-            let cartesAtout = main.map((c, i) => (c && c.couleur === atoutActuel) ? i : -1).filter(i => i !== -1);
-            if (cartesAtout.length > 0) indexCarte = cartesAtout[0];
-        }
+
+    const valides = [];
+    main.forEach((c, i) => { if (c && estCoupValide(idJoueur, i, main, couleurDemandee, true)) valides.push(i); });
+    if (valides.length === 0) return 0;
+
+    const force = (c) => c.couleur === atoutActuel ? 100 + ordreAtout.indexOf(c.valeur) : ordreNormal.indexOf(c.valeur);
+
+    let partenaireMaitre = false;
+    if (pliEnCours.length > 0) {
+        const m = trouverMaitrePli(pliEnCours);
+        partenaireMaitre = joueurs[m.joueur].equipe === joueurs[idJoueur].equipe;
     }
-    return indexCarte;
+
+    if (partenaireMaitre) { // on "charge" le partenaire de points
+        valides.sort((a, b) => pointsCarte(main[b]) - pointsCarte(main[a]));
+        return valides[0];
+    }
+    valides.sort((a, b) => force(main[a]) - force(main[b]));
+    return pliEnCours.length === 0 ? valides[valides.length - 1] : valides[0];
 }
 
 function resoudrePli() {
-    const couleurDemandee = pliEnCours[0].carte.couleur;
-    let gagnant = pliEnCours[0].joueur; let carteGagnante = pliEnCours[0].carte;
+    const maitre = trouverMaitrePli(pliEnCours);
+    const gagnant = maitre.joueur;
+    const eq = joueurs[gagnant].equipe;
 
-    for (let i = 1; i < 4; i++) {
-        const joueur = pliEnCours[i].joueur; const carte = pliEnCours[i].carte;
-        if (carte.couleur === atoutActuel && carteGagnante.couleur !== atoutActuel) { gagnant = joueur; carteGagnante = carte; }
-        else if (carte.couleur === couleurDemandee && carteGagnante.couleur === couleurDemandee) { if (estPlusForte(carte, carteGagnante)) { gagnant = joueur; carteGagnante = carte; } }
-        else if (carte.couleur === atoutActuel && carteGagnante.couleur === atoutActuel) { if (estPlusForte(carte, carteGagnante)) { gagnant = joueur; carteGagnante = carte; } }
-    }
+    let pointsPli = pliEnCours.reduce((sum, item) => sum + pointsCarte(item.carte), 0);
+    nombrePli++;
+    plisGagnes[eq]++;
+    plisParJoueur[gagnant]++;
+    if (nombrePli === 8) { pointsPli += 10; afficherToast("+10 points (Dix de Der) !"); }
 
-    let pointsPli = pliEnCours.reduce((sum, item) => sum + pointsBelote[item.carte.valeur], 0);
-    nombrePli++; if (nombrePli === 8) { pointsPli += 10; afficherToast("+10 points (Dix de Der) !"); }
+    detailManche.plis[eq] += pointsPli;
+    mettreAJourInfos();
+    jouerSon(sonPiocher);
 
-    scores[joueurs[gagnant].equipe] += pointsPli; mettreAJourInfos();
-    
     const cartesHTML = document.querySelectorAll('.carte-pli');
     cartesHTML.forEach(img => {
         if (gagnant === 0) img.classList.add('collect', 'pli-bas'); else if (gagnant === 1) img.classList.add('collect', 'pli-gauche');
@@ -539,10 +731,10 @@ function resoudrePli() {
 
     setTimeout(() => {
         pliEnCours = []; cartesPli = []; document.getElementById('zone-pli').innerHTML = "";
-        tourActuel = gagnant; mettreAJourInfos(); partieBloquee = false;
+        tourActuel = gagnant; partieBloquee = false; mettreAJourInfos();
         if (joueurs[0].main.length === 0) finDeMancheCoinche();
         else { if (tourActuel !== 0) setTimeout(() => iaJoue(tourActuel), 800); }
-    }, 1000); 
+    }, 1000);
 }
 
 function estPlusForte(carte1, carte2) {
@@ -550,44 +742,143 @@ function estPlusForte(carte1, carte2) {
     return ordre.indexOf(carte1.valeur) > ordre.indexOf(carte2.valeur);
 }
 
-// ==========================================
-// FIN DE PARTIE
-// ==========================================
 function finDeMancheCoinche() {
-    let equipePreneuse = joueurs[preneur].equipe; let equipeDefense = equipePreneuse === 1 ? 2 : 1;
-    let pointsPreneur = scores[equipePreneuse];
-    
-    if (pointsPreneur >= contratValeur) { afficherToast(`✅ CONTRAT RÉUSSI !`); }
-    else {
-        afficherToast(`❌ CONTRAT ÉCHOUÉ (Dedans) !`);
-        scores[equipeDefense] += (160 + contratValeur); scores[equipePreneuse] = 0; 
-    }
-    
-    if (scores[1] >= 3000 || scores[2] >= 3000) {
-        let equipeGagnante = scores[1] >= 3000 ? "Nous (Vous & Partenaire)" : "Eux (Adversaires)";
-        afficherToast(`FIN DE LA PARTIE !<br>${equipeGagnante} remporte la partie avec ${Math.max(scores[1], scores[2])} points !`);
-        setTimeout(() => {
-            if (confirm("Voulez-vous rejouer une partie ?")) { scores = { 1: 0, 2: 0 }; lancerCoinche(); }
-            else window.location.href = "index.html";
-        }, 3000);
+    const eqP = joueurs[preneur].equipe;
+    const eqD = eqP === 1 ? 2 : 1;
+
+    // Capot : une équipe a fait les 8 plis (+90)
+    let capotTxt = "";
+    [1, 2].forEach(eq => {
+        if (plisGagnes[eq] === 8) { detailManche.plis[eq] += 90; capotTxt = ` · CAPOT (+90)`; }
+    });
+
+    // Contrat réussi ? (points de la manche uniquement, plus jamais le cumul des anciennes parties)
+    let reussi;
+    if (contratValeur === 500) reussi = plisParJoueur[preneur] === 8;        // Générale : le preneur seul fait tout
+    else if (contratValeur === 250) reussi = plisGagnes[eqP] === 8;          // Capot
+    else reussi = totalManche(eqP) >= contratValeur;
+
+    const ptsP = totalManche(eqP);
+    const ptsD = totalManche(eqD);
+    let gainP, gainD;
+    if (reussi) {
+        gainP = ptsP + contratValeur;
+        gainD = ptsD;
+        jouerSon(eqP === 1 ? sonVictoire : sonDefaite);
     } else {
-        setTimeout(() => { lancerCoinche(); }, 2000);
+        gainD = 160 + contratValeur + detailManche.belote[eqD] + detailManche.annonces[eqD];
+        gainP = detailManche.belote[eqP]; // la belote reste acquise
+        jouerSon(eqP === 1 ? sonDefaite : sonVictoire);
+    }
+    scores[eqP] += gainP;
+    scores[eqD] += gainD;
+    mettreAJourInfos();
+
+    const gains = {}; gains[eqP] = gainP; gains[eqD] = gainD;
+    const fin = scores[1] >= 3000 || scores[2] >= 3000;
+    const nousGagnons = scores[1] >= scores[2];
+
+    afficherFinManche({
+        titre: fin ? (nousGagnons ? "🏆 Victoire !" : "Défaite...") : "Fin de la manche",
+        sousTitre: `${reussi ? '✅ Contrat réussi' : '❌ Contrat chuté (dedans)'}<br>`
+                   + `${contratValeur} ${getSymbole(atoutActuel)} · ${joueurs[preneur].nom}${capotTxt}`
+                   + (reussi ? `<br>Le preneur a fait ${ptsP} pts` : `<br>La défense marque ${160 + contratValeur}`)
+                   + (fin ? `<br><strong>${nousGagnons ? 'Votre équipe' : "L'équipe adverse"} remporte la partie !</strong>` : ''),
+        classe: (eqP === 1) === reussi ? 'ok' : 'ko',
+        lignes: [
+            ['Plis (dix de der inclus)', detailManche.plis[1], detailManche.plis[2]],
+            ['Belote-Rebelote', detailManche.belote[1], detailManche.belote[2]],
+            ['Annonces', detailManche.annonces[1], detailManche.annonces[2]],
+            ['Points marqués (contrat inclus)', gains[1], gains[2], 'total'],
+            ['Total de la partie', scores[1], scores[2], 'grand-total']
+        ],
+        fin: fin,
+        texteBouton: fin ? 'Rejouer' : 'Manche suivante',
+        onSuivant: () => { if (fin) scores = { 1: 0, 2: 0 }; lancerCoinche(); }
+    });
+}
+
+function afficherAtoutSurJoueur() {
+    for (let i = 1; i <= 3; i++) {
+        let el = document.getElementById(`nom-j${i}`);
+        if (el) el.innerHTML = joueurs[i] ? joueurs[i].nom : '';
+    }
+    if (!atoutActuel || preneur === -1) return;
+
+    let preneurElement = document.getElementById(`nom-j${preneur}`);
+    if (preneurElement) {
+        let estRouge = (atoutActuel === 'coeur' || atoutActuel === 'carreau');
+        let couleur = estRouge ? '#e74c3c' : '#ffffff';
+        preneurElement.innerHTML += ` <span style="font-size:22px; color:${couleur}; text-shadow: 1px 1px 2px black; vertical-align: middle;">[${getSymbole(atoutActuel)}]</span>`;
     }
 }
 
+// Valeur d'une carte : à l'atout le Valet vaut 20 et le 9 vaut 14
+function pointsCarte(c) {
+    if (c.couleur === atoutActuel) {
+        if (c.valeur === 'valet') return 20;
+        if (c.valeur === '9') return 14;
+    }
+    return pointsBelote[c.valeur];
+}
 // ==========================================
-// UI ATOUT GEANT
+// AFFICHAGE : adversaires, badge d'atout, fin de manche
 // ==========================================
-function afficherAtoutGeant(couleur) {
-    let div = document.getElementById('affichage-atout');
-    if (!div) return;
-    
-    let estRouge = (couleur === 'coeur' || couleur === 'carreau');
-    let classeCouleur = estRouge ? 'rouge' : 'noir';
-    
-    div.innerHTML = `
-        <span>Atout</span>
-        <div class="badge-atout-symbole ${classeCouleur}">${getSymbole(couleur)}</div>
-    `;
-    div.classList.add('badge-atout-geant');
+function afficherAdversaires() {
+    if (joueurs.length !== 4) return;
+    for (let i = 1; i <= 3; i++) {
+        const el = document.getElementById(`eventail-j${i}`);
+        if (!el) continue;
+        const n = joueurs[i].main.length;
+        let h = '';
+        for (let k = 0; k < n; k++) h += '<div class="dos-carte"></div>';
+        h += `<span class="compteur-cartes">${n}</span>`;
+        el.innerHTML = h;
+    }
+}
+
+function afficherBadgeAtout(detail) {
+    const b = document.getElementById('badge-atout');
+    if (!b || !atoutActuel) return;
+    const rouge = (atoutActuel === 'coeur' || atoutActuel === 'carreau');
+    const s = document.getElementById('badge-atout-symbole');
+    s.textContent = getSymbole(atoutActuel);
+    s.className = 'badge-atout-symbole ' + (rouge ? 'rouge' : 'noir');
+    document.getElementById('badge-atout-detail').textContent = detail || '';
+    b.style.display = 'flex';
+}
+
+function cacherBadgeAtout() {
+    const b = document.getElementById('badge-atout');
+    if (b) b.style.display = 'none';
+    const m = document.getElementById('modal-fin-manche');
+    if (m) m.style.display = 'none';
+}
+
+function majIndicateurTour(monTour) {
+    const ind = document.getElementById('indicateur-tour');
+    if (ind) ind.style.display = monTour ? 'block' : 'none';
+}
+
+function afficherFinManche(o) {
+    const m = document.getElementById('modal-fin-manche');
+    if (!m) return;
+    const rows = o.lignes.map(l => `<tr class="${l[3] || ''}"><td>${l[0]}</td><td>${l[1]}</td><td>${l[2]}</td></tr>`).join('');
+    document.getElementById('fin-manche-contenu').innerHTML =
+        `<h2>${o.titre}</h2>
+         <p class="fin-resultat ${o.classe}">${o.sousTitre}</p>
+         <table class="fin-table"><thead><tr><th></th><th>Nous</th><th>Eux</th></tr></thead><tbody>${rows}</tbody></table>
+         <div class="fin-boutons" id="fin-boutons"></div>`;
+    const zone = document.getElementById('fin-boutons');
+    const btn = document.createElement('button');
+    btn.className = 'btn-action btn-vert'; btn.textContent = o.texteBouton;
+    btn.onclick = () => { m.style.display = 'none'; o.onSuivant(); };
+    zone.appendChild(btn);
+    if (o.fin) {
+        const b2 = document.createElement('button');
+        b2.className = 'btn-action btn-rouge'; b2.textContent = 'Retour au menu';
+        b2.onclick = () => { window.location.href = 'index.html'; };
+        zone.appendChild(b2);
+    }
+    m.style.display = 'flex';
 }
